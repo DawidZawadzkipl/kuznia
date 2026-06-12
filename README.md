@@ -20,7 +20,12 @@ Default local database settings:
 - database: `kuznia`
 - user: `kuznia`
 - password: `kuznia`
-- port: `5432`
+- host port: `5433`
+- container port: `5432`
+
+Application URL:
+
+- `http://localhost:8082`
 
 Seeded admin account:
 
