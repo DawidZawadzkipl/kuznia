@@ -68,6 +68,11 @@ export interface Availability {
   available: boolean;
 }
 
+export interface AvailableSlot {
+  startTime: string;
+  endTime: string;
+}
+
 export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
 
 export interface Reservation {

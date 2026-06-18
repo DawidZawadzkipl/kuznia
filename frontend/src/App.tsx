@@ -24,6 +24,7 @@ import { ApiError, api, resolveMediaUrl } from './api';
 import type {
   AdminStats,
   Availability,
+  AvailableSlot,
   LiftResult,
   LiftType,
   ProgressPoint,
@@ -365,6 +366,8 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [trainerId, setTrainerId] = useState('');
   const [trainingTypeId, setTrainingTypeId] = useState('');
   const [startTime, setStartTime] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   const [liftType, setLiftType] = useState('SQUAT');
   const [weightKg, setWeightKg] = useState('');
@@ -394,14 +397,29 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
 
   useEffect(refresh, [onError]);
 
+  useEffect(() => {
+    setStartTime('');
+    setAvailableSlots([]);
+    if (!trainerId) {
+      return;
+    }
+    setSlotsLoading(true);
+    api.publicAvailableSlots(Number(trainerId))
+      .then(setAvailableSlots)
+      .catch(onError)
+      .finally(() => setSlotsLoading(false));
+  }, [trainerId, onError]);
+
   async function reserve(event: FormEvent) {
     event.preventDefault();
     try {
       await api.requestReservation({
         trainerId: Number(trainerId),
         trainingTypeId: Number(trainingTypeId),
-        startTime: new Date(startTime).toISOString(),
+        startTime,
       });
+      setStartTime('');
+      setAvailableSlots((current) => current.filter((slot) => slot.startTime !== startTime));
       refresh();
     } catch (error) {
       onError(error);
@@ -448,7 +466,28 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
               {trainingTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
             </select>
             <FieldLabel required>Termin</FieldLabel>
-            <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+            <select
+              className="form-select"
+              disabled={!trainerId || slotsLoading || availableSlots.length === 0}
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+            >
+              <option value="">
+                {!trainerId
+                  ? 'Najpierw wybierz trenera'
+                  : slotsLoading
+                    ? 'Ladowanie terminow...'
+                    : availableSlots.length === 0
+                      ? 'Brak dostepnych terminow'
+                      : 'Wybierz termin'}
+              </option>
+              {availableSlots.map((slot) => (
+                <option key={slot.startTime} value={slot.startTime}>
+                  {formatDate(slot.startTime)} - {formatTime(slot.endTime)}
+                </option>
+              ))}
+            </select>
             <button className="btn btn-warning" type="submit">Popros o termin</button>
           </form>
         </div>
@@ -942,6 +981,12 @@ function IconButton({ title, children, onClick }: {
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('pl-PL', {
     dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('pl-PL', {
     timeStyle: 'short',
   }).format(new Date(value));
 }

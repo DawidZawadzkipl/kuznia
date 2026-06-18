@@ -8,6 +8,7 @@ import org.bnabd.kuznia.repository.TrainingTypeRepository;
 import org.bnabd.kuznia.service.AvailabilityService;
 import org.bnabd.kuznia.service.TrainerService;
 import org.bnabd.kuznia.web.dto.AvailabilityResponse;
+import org.bnabd.kuznia.web.dto.AvailableSlotResponse;
 import org.bnabd.kuznia.web.dto.LiftTypeResponse;
 import org.bnabd.kuznia.web.dto.SpecializationResponse;
 import org.bnabd.kuznia.web.dto.TrainerResponse;
@@ -46,6 +47,11 @@ public class PublicController {
 		return availabilityService.findByTrainer(id).stream()
 				.map(mapper::toAvailabilityResponse)
 				.toList();
+	}
+
+	@GetMapping("/trainers/{id}/available-slots")
+	public List<AvailableSlotResponse> availableSlots(@PathVariable Long id) {
+		return availabilityService.findAvailableSlots(id);
 	}
 
 	@GetMapping("/training-types")
