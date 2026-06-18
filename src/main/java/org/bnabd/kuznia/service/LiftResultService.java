@@ -80,7 +80,7 @@ public class LiftResultService {
 				.toList();
 	}
 
-	private BigDecimal calculateOneRepMax(BigDecimal weightKg, int reps) {
+	private BigDecimal calculateOneRepMax(BigDecimal weightKg, Integer reps) {
 		if (reps <= 1) {
 			return weightKg.setScale(2, RoundingMode.HALF_UP);
 		}

@@ -36,7 +36,7 @@ import type {
 } from './types';
 
 type View = 'public' | 'client' | 'trainer' | 'admin' | 'profile';
-type UiError = { status: 400 | 500; message: string };
+type UiError = { status: 400 | 403 | 500; message: string };
 
 const statusLabels: Record<string, string> = {
   PENDING: 'Oczekuje',
@@ -75,6 +75,11 @@ export function App() {
 
   function handleApiError(error: unknown) {
     if (error instanceof ApiError) {
+      if (error.status === 401 || error.status === 403) {
+        logout();
+        setUiError({ status: 403, message: 'Brak dostepu do tej operacji. Zaloguj sie ponownie na konto z odpowiednia rola.' });
+        return;
+      }
       if (error.status >= 500) {
         setUiError({ status: 500, message: error.body?.message ?? 'Serwer nie odpowiada prawidlowo.' });
         return;
@@ -213,15 +218,15 @@ function AuthPanel({ onAuth, onError }: {
         <button className={`btn ${mode === 'register' ? 'btn-warning' : 'btn-outline-warning'}`} type="button" onClick={() => setMode('register')}>Rejestracja</button>
       </div>
       <FieldLabel required>Email</FieldLabel>
-      <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+      <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
       <FieldLabel required>Haslo</FieldLabel>
-      <input className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} type="password" />
+      <input className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
       {mode === 'register' && (
         <>
           <FieldLabel required>Imie</FieldLabel>
-          <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
           <FieldLabel required>Nazwisko</FieldLabel>
-          <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
           <FieldLabel>Telefon opcjonalnie</FieldLabel>
           <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </>
@@ -239,7 +244,7 @@ function ErrorView({ error, onBack }: { error: UiError; onBack: () => void }) {
       <div className="error-card">
         <AlertTriangle size={44} />
         <span className="error-code">{error.status}</span>
-        <h1>{error.status === 500 ? 'Blad serwera' : 'Nieudane zadanie'}</h1>
+        <h1>{error.status === 500 ? 'Blad serwera' : error.status === 403 ? 'Brak dostepu' : 'Nieudane zadanie'}</h1>
         <p>{error.message}</p>
         <button className="btn btn-warning" type="button" onClick={onBack}>Wroc do aplikacji</button>
       </div>
@@ -297,10 +302,10 @@ function TrainerCard({ trainer }: { trainer: Trainer }) {
       <div className="trainer-photo">
         {image ? <img src={image} alt={`${trainer.firstName} ${trainer.lastName}`} /> : <Dumbbell size={42} />}
       </div>
-      <div>
+      <div className="trainer-card-body">
         <h3>{trainer.firstName} {trainer.lastName}</h3>
         <p>{trainer.bio || 'Trener Kuzni'}</p>
-        <div className="tag-row">
+        <div className="tag-row trainer-tags">
           {trainer.specializations.map((specialization) => (
             <span className="tag" key={specialization.id}>{specialization.name}</span>
           ))}
@@ -338,9 +343,9 @@ function ProfileView({ user, setUser, onError }: {
       <form className="panel form-grid" onSubmit={submit}>
         {saved && <div className="alert alert-success">Zapisano zmiany.</div>}
         <FieldLabel required>Imie</FieldLabel>
-        <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
         <FieldLabel required>Nazwisko</FieldLabel>
-        <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
         <FieldLabel>Telefon opcjonalnie</FieldLabel>
         <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <button className="btn btn-warning" type="submit">Zapisz</button>
@@ -365,6 +370,7 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [weightKg, setWeightKg] = useState('');
   const [reps, setReps] = useState('1');
   const [resultDate, setResultDate] = useState(new Date().toISOString().slice(0, 10));
+  const [resultError, setResultError] = useState('');
 
   const refresh = () => {
     Promise.all([
@@ -404,11 +410,18 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
 
   async function addResult(event: FormEvent) {
     event.preventDefault();
+    const weightValue = Number(weightKg);
+    const repsValue = Number(reps);
+    if (!Number.isFinite(weightValue) || weightValue <= 0 || !Number.isInteger(repsValue) || repsValue <= 0 || !resultDate) {
+      setResultError('Podaj poprawny ciezar, liczbe powtorzen i date wyniku.');
+      return;
+    }
+    setResultError('');
     try {
       await api.addLiftResult({
         liftType,
-        weightKg: Number(weightKg),
-        reps: Number(reps),
+        weightKg: weightValue,
+        reps: repsValue,
         resultDate,
       });
       refresh();
@@ -425,17 +438,17 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
           <form className="panel form-grid" onSubmit={reserve}>
             <h3>Nowa rezerwacja</h3>
             <FieldLabel required>Trener</FieldLabel>
-            <select className="form-select" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
+            <select className="form-select" value={trainerId} onChange={(e) => setTrainerId(e.target.value)} required>
               <option value="">Trener</option>
               {trainers.map((trainer) => <option key={trainer.id} value={trainer.id}>{trainer.firstName} {trainer.lastName}</option>)}
             </select>
             <FieldLabel required>Typ treningu</FieldLabel>
-            <select className="form-select" value={trainingTypeId} onChange={(e) => setTrainingTypeId(e.target.value)}>
+            <select className="form-select" value={trainingTypeId} onChange={(e) => setTrainingTypeId(e.target.value)} required>
               <option value="">Typ treningu</option>
               {trainingTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
             </select>
             <FieldLabel required>Termin</FieldLabel>
-            <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
             <button className="btn btn-warning" type="submit">Popros o termin</button>
           </form>
         </div>
@@ -452,6 +465,7 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
         <div className="col-lg-4">
           <form className="panel form-grid" onSubmit={addResult}>
             <h3>Dodaj wynik</h3>
+            {resultError && <div className="alert alert-warning mb-0">{resultError}</div>}
             <FieldLabel required>Boj</FieldLabel>
             <select className="form-select" value={liftType} onChange={(e) => setLiftType(e.target.value)}>
               <option value="SQUAT">Przysiad</option>
@@ -459,11 +473,11 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
               <option value="DEADLIFT">Martwy ciag</option>
             </select>
             <FieldLabel required>Ciezar kg</FieldLabel>
-            <input className="form-control" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+            <input className="form-control" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} type="number" min="0.01" step="0.01" required />
             <FieldLabel required>Powtorzenia</FieldLabel>
-            <input className="form-control" value={reps} onChange={(e) => setReps(e.target.value)} />
+            <input className="form-control" value={reps} onChange={(e) => setReps(e.target.value)} type="number" min="1" step="1" required />
             <FieldLabel required>Data wyniku</FieldLabel>
-            <input className="form-control" type="date" value={resultDate} onChange={(e) => setResultDate(e.target.value)} />
+            <input className="form-control" type="date" value={resultDate} onChange={(e) => setResultDate(e.target.value)} required />
             <button className="btn btn-warning" type="submit">Zapisz wynik</button>
           </form>
           <div className="panel mt-3">
@@ -540,9 +554,9 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
           <form className="panel form-grid" onSubmit={addAvailability}>
             <h3>Dostepnosc</h3>
             <FieldLabel required>Poczatek</FieldLabel>
-            <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
             <FieldLabel required>Koniec</FieldLabel>
-            <input className="form-control" type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <input className="form-control" type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
             <button className="btn btn-warning" type="submit">Dodaj termin</button>
           </form>
           <div className="panel mt-3">
@@ -644,6 +658,15 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
     });
   }
 
+  function toggleSpecialization(specializationId: number) {
+    setTrainerForm((current) => ({
+      ...current,
+      specializationIds: current.specializationIds.includes(specializationId)
+        ? current.specializationIds.filter((id) => id !== specializationId)
+        : [...current.specializationIds, specializationId],
+    }));
+  }
+
   async function handlePhotoFile(file?: File) {
     if (!file) return;
     setPhotoUploading(true);
@@ -685,7 +708,7 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
     try {
       await api.createTrainingType({
         ...trainingTypeForm,
-        durationMinutes: Number(trainingTypeForm.durationMinutes),
+        durationMinutes: 90,
         price: Number(trainingTypeForm.price),
         active: true,
       });
@@ -716,13 +739,13 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
               {editingTrainerId && <button className="btn btn-sm btn-outline-light" type="button" onClick={resetTrainerForm}>Anuluj</button>}
             </div>
             <FieldLabel required>Email</FieldLabel>
-            <input className="form-control" value={trainerForm.email} onChange={(e) => setTrainerForm({ ...trainerForm, email: e.target.value })} type="email" />
+            <input className="form-control" value={trainerForm.email} onChange={(e) => setTrainerForm({ ...trainerForm, email: e.target.value })} type="email" required />
             <FieldLabel required={!editingTrainerId}>{editingTrainerId ? 'Nowe haslo opcjonalnie' : 'Haslo'}</FieldLabel>
-            <input className="form-control" type="password" value={trainerForm.password} onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })} />
+            <input className="form-control" type="password" value={trainerForm.password} onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })} required={!editingTrainerId} />
             <FieldLabel required>Imie</FieldLabel>
-            <input className="form-control" value={trainerForm.firstName} onChange={(e) => setTrainerForm({ ...trainerForm, firstName: e.target.value })} />
+            <input className="form-control" value={trainerForm.firstName} onChange={(e) => setTrainerForm({ ...trainerForm, firstName: e.target.value })} required />
             <FieldLabel required>Nazwisko</FieldLabel>
-            <input className="form-control" value={trainerForm.lastName} onChange={(e) => setTrainerForm({ ...trainerForm, lastName: e.target.value })} />
+            <input className="form-control" value={trainerForm.lastName} onChange={(e) => setTrainerForm({ ...trainerForm, lastName: e.target.value })} required />
             <FieldLabel>Zdjecie trenera</FieldLabel>
             <div
               className="file-drop"
@@ -745,25 +768,31 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
             <FieldLabel>Bio</FieldLabel>
             <textarea className="form-control" value={trainerForm.bio} onChange={(e) => setTrainerForm({ ...trainerForm, bio: e.target.value })} />
             <FieldLabel required>Specjalizacje</FieldLabel>
-            <select className="form-select" multiple value={trainerForm.specializationIds.map(String)} onChange={(e) => setTrainerForm({
-              ...trainerForm,
-              specializationIds: Array.from(e.target.selectedOptions).map((option) => Number(option.value)),
-            })}>
-              {specializations.map((specialization) => <option key={specialization.id} value={specialization.id}>{specialization.name}</option>)}
-            </select>
+            <div className="check-grid">
+              {specializations.map((specialization) => (
+                <label className="check-option" key={specialization.id}>
+                  <input
+                    checked={trainerForm.specializationIds.includes(specialization.id)}
+                    onChange={() => toggleSpecialization(specialization.id)}
+                    type="checkbox"
+                  />
+                  <span>{specialization.name}</span>
+                </label>
+              ))}
+            </div>
             <button className="btn btn-warning" type="submit">{editingTrainerId ? 'Zapisz trenera' : 'Utworz trenera'}</button>
           </form>
 
           <form className="panel form-grid mt-3" onSubmit={createTrainingType}>
             <h3>Nowy typ treningu</h3>
             <FieldLabel required>Nazwa</FieldLabel>
-            <input className="form-control" value={trainingTypeForm.name} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, name: e.target.value })} />
+            <input className="form-control" value={trainingTypeForm.name} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, name: e.target.value })} required />
             <FieldLabel>Opis</FieldLabel>
             <textarea className="form-control" value={trainingTypeForm.description} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, description: e.target.value })} />
-            <FieldLabel required>Czas trwania w minutach</FieldLabel>
-            <input className="form-control" type="number" min="1" value={trainingTypeForm.durationMinutes} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, durationMinutes: e.target.value })} />
+            <FieldLabel>Czas trwania</FieldLabel>
+            <div className="locked-field">90 minut</div>
             <FieldLabel required>Cena PLN</FieldLabel>
-            <input className="form-control" type="number" min="1" step="0.01" value={trainingTypeForm.price} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, price: e.target.value })} />
+            <input className="form-control" type="number" min="1" step="0.01" value={trainingTypeForm.price} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, price: e.target.value })} required />
             <button className="btn btn-warning" type="submit">Dodaj typ treningu</button>
           </form>
         </div>
@@ -879,11 +908,11 @@ function Header({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-function FieldLabel({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
+function FieldLabel({ children }: { children: React.ReactNode; required?: boolean }) {
   return (
     <label className="field-label">
       {children}
-      {required && <span aria-label="wymagane">*</span>}
+      <span aria-label="pole formularza">*</span>
     </label>
   );
 }

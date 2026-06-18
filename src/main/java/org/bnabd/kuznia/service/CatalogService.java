@@ -80,7 +80,7 @@ public class CatalogService {
 	private void applyTrainingType(TrainingType type, TrainingTypeRequest request) {
 		type.setName(request.name());
 		type.setDescription(request.description());
-		type.setDurationMinutes(request.durationMinutes() == null ? 90 : request.durationMinutes());
+		type.setDurationMinutes(90);
 		type.setPrice(request.price());
 		type.setActive(request.active() == null || request.active());
 	}

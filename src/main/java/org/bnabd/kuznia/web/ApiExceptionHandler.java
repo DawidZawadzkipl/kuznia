@@ -7,6 +7,7 @@ import org.bnabd.kuznia.web.dto.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,7 +25,7 @@ public class ApiExceptionHandler {
 		return error(HttpStatus.UNAUTHORIZED, "Nieprawidlowy email lub haslo.");
 	}
 
-	@ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class})
+	@ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class, HttpMessageNotReadableException.class})
 	public ResponseEntity<ErrorResponse> handleValidation(Exception exception) {
 		return error(HttpStatus.BAD_REQUEST, "Nieprawidlowe dane wejsciowe.");
 	}

@@ -9,7 +9,7 @@ import org.bnabd.kuznia.domain.LiftTypeName;
 public record LiftResultRequest(
 		@NotNull LiftTypeName liftType,
 		@NotNull @Positive BigDecimal weightKg,
-		@Positive int reps,
+		@NotNull @Positive Integer reps,
 		@NotNull LocalDate resultDate,
 		String notes
 ) {
