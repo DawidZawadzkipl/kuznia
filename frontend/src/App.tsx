@@ -149,7 +149,7 @@ export function App() {
       </aside>
 
       <main className="main-content">
-        {view === 'public' && <PublicView onError={handleApiError} />}
+        {view === 'public' && <PublicView />}
         {view === 'profile' && user && <ProfileView user={user} setUser={setUser} onError={handleApiError} />}
         {view === 'client' && user?.role === 'CLIENT' && <ClientDashboard onError={handleApiError} />}
         {view === 'trainer' && user?.role === 'TRAINER' && <TrainerDashboard onError={handleApiError} />}
@@ -184,8 +184,8 @@ function AuthPanel({ onAuth, onError }: {
   onError: (error: unknown) => void;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('admin@kuznia.local');
-  const [password, setPassword] = useState('Admin123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
@@ -212,13 +212,18 @@ function AuthPanel({ onAuth, onError }: {
         <button className={`btn ${mode === 'login' ? 'btn-warning' : 'btn-outline-warning'}`} type="button" onClick={() => setMode('login')}>Login</button>
         <button className={`btn ${mode === 'register' ? 'btn-warning' : 'btn-outline-warning'}`} type="button" onClick={() => setMode('register')}>Rejestracja</button>
       </div>
-      <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-      <input className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Haslo" type="password" />
+      <FieldLabel required>Email</FieldLabel>
+      <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+      <FieldLabel required>Haslo</FieldLabel>
+      <input className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} type="password" />
       {mode === 'register' && (
         <>
-          <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Imie" />
-          <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Nazwisko" />
-          <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefon" />
+          <FieldLabel required>Imie</FieldLabel>
+          <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <FieldLabel required>Nazwisko</FieldLabel>
+          <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          <FieldLabel>Telefon opcjonalnie</FieldLabel>
+          <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </>
       )}
       <button className="btn btn-warning w-100" disabled={loading} type="submit">
@@ -242,23 +247,31 @@ function ErrorView({ error, onBack }: { error: UiError; onBack: () => void }) {
   );
 }
 
-function PublicView({ onError }: { onError: (error: unknown) => void }) {
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [trainingTypes, setTrainingTypes] = useState<TrainingType[]>([]);
+function PublicView() {
+	const [trainers, setTrainers] = useState<Trainer[]>([]);
+	const [trainingTypes, setTrainingTypes] = useState<TrainingType[]>([]);
+	const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    Promise.all([api.publicTrainers(), api.trainingTypes()])
-      .then(([trainerData, typeData]) => {
-        setTrainers(trainerData);
-        setTrainingTypes(typeData);
-      })
-      .catch(onError);
-  }, [onError]);
+	useEffect(() => {
+		Promise.all([api.publicTrainers(), api.trainingTypes()])
+			.then(([trainerData, typeData]) => {
+				setLoadError('');
+				setTrainers(trainerData);
+				setTrainingTypes(typeData);
+			})
+			.catch(() => setLoadError('Backend jest niedostepny. Uruchom Docker Desktop, Postgresa i aplikacje Spring Boot na porcie 8082.'));
+	}, []);
 
-  return (
-    <section>
-      <Header eyebrow="Publiczna oferta" title="Trenerzy, terminy i treningi" />
-      <div className="row g-3 mb-4">
+	return (
+		<section>
+			<Header eyebrow="Publiczna oferta" title="Trenerzy, terminy i treningi" />
+			{loadError && (
+				<div className="panel border-warning mb-3">
+					<strong className="text-warning">Nie mozna pobrac danych.</strong>
+					<p className="mb-0 mt-2">{loadError}</p>
+				</div>
+			)}
+			<div className="row g-3 mb-4">
         {trainingTypes.map((type) => (
           <div className="col-md-4" key={type.id}>
             <div className="panel h-100">
@@ -324,8 +337,11 @@ function ProfileView({ user, setUser, onError }: {
       <Header eyebrow="Konto" title="Profil uzytkownika" />
       <form className="panel form-grid" onSubmit={submit}>
         {saved && <div className="alert alert-success">Zapisano zmiany.</div>}
+        <FieldLabel required>Imie</FieldLabel>
         <input className="form-control" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <FieldLabel required>Nazwisko</FieldLabel>
         <input className="form-control" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        <FieldLabel>Telefon opcjonalnie</FieldLabel>
         <input className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} />
         <button className="btn btn-warning" type="submit">Zapisz</button>
       </form>
@@ -408,14 +424,17 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
         <div className="col-xl-4">
           <form className="panel form-grid" onSubmit={reserve}>
             <h3>Nowa rezerwacja</h3>
+            <FieldLabel required>Trener</FieldLabel>
             <select className="form-select" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
               <option value="">Trener</option>
               {trainers.map((trainer) => <option key={trainer.id} value={trainer.id}>{trainer.firstName} {trainer.lastName}</option>)}
             </select>
+            <FieldLabel required>Typ treningu</FieldLabel>
             <select className="form-select" value={trainingTypeId} onChange={(e) => setTrainingTypeId(e.target.value)}>
               <option value="">Typ treningu</option>
               {trainingTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
             </select>
+            <FieldLabel required>Termin</FieldLabel>
             <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             <button className="btn btn-warning" type="submit">Popros o termin</button>
           </form>
@@ -433,13 +452,17 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
         <div className="col-lg-4">
           <form className="panel form-grid" onSubmit={addResult}>
             <h3>Dodaj wynik</h3>
+            <FieldLabel required>Boj</FieldLabel>
             <select className="form-select" value={liftType} onChange={(e) => setLiftType(e.target.value)}>
               <option value="SQUAT">Przysiad</option>
               <option value="BENCH_PRESS">Wyciskanie lezac</option>
               <option value="DEADLIFT">Martwy ciag</option>
             </select>
-            <input className="form-control" placeholder="Ciezar kg" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
-            <input className="form-control" placeholder="Powtorzenia" value={reps} onChange={(e) => setReps(e.target.value)} />
+            <FieldLabel required>Ciezar kg</FieldLabel>
+            <input className="form-control" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+            <FieldLabel required>Powtorzenia</FieldLabel>
+            <input className="form-control" value={reps} onChange={(e) => setReps(e.target.value)} />
+            <FieldLabel required>Data wyniku</FieldLabel>
             <input className="form-control" type="date" value={resultDate} onChange={(e) => setResultDate(e.target.value)} />
             <button className="btn btn-warning" type="submit">Zapisz wynik</button>
           </form>
@@ -516,7 +539,9 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
         <div className="col-lg-4">
           <form className="panel form-grid" onSubmit={addAvailability}>
             <h3>Dostepnosc</h3>
+            <FieldLabel required>Poczatek</FieldLabel>
             <input className="form-control" type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <FieldLabel required>Koniec</FieldLabel>
             <input className="form-control" type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             <button className="btn btn-warning" type="submit">Dodaj termin</button>
           </form>
@@ -560,6 +585,8 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [specializations, setSpecializations] = useState<Specialization[]>([]);
   const [trainingTypes, setTrainingTypes] = useState<TrainingType[]>([]);
+  const [editingTrainerId, setEditingTrainerId] = useState<number | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const [trainerForm, setTrainerForm] = useState({
     email: '',
@@ -570,6 +597,12 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
     photoUrl: '',
     hourlyRate: '',
     specializationIds: [] as number[],
+  });
+  const [trainingTypeForm, setTrainingTypeForm] = useState({
+    name: '',
+    description: '',
+    durationMinutes: '90',
+    price: '',
   });
 
   const refresh = () => {
@@ -592,16 +625,71 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
 
   useEffect(refresh, [onError]);
 
-  async function createTrainer(event: FormEvent) {
+  function resetTrainerForm() {
+    setEditingTrainerId(null);
+    setTrainerForm({ email: '', password: '', firstName: '', lastName: '', bio: '', photoUrl: '', hourlyRate: '', specializationIds: [] });
+  }
+
+  function editTrainer(trainer: Trainer) {
+    setEditingTrainerId(trainer.id);
+    setTrainerForm({
+      email: trainer.email,
+      password: '',
+      firstName: trainer.firstName,
+      lastName: trainer.lastName,
+      bio: trainer.bio ?? '',
+      photoUrl: trainer.photoUrl ?? '',
+      hourlyRate: trainer.hourlyRate ? String(trainer.hourlyRate) : '',
+      specializationIds: trainer.specializations.map((specialization) => specialization.id),
+    });
+  }
+
+  async function handlePhotoFile(file?: File) {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const response = await api.uploadTrainerPhoto(file);
+      setTrainerForm((current) => ({ ...current, photoUrl: response.url }));
+    } catch (error) {
+      onError(error);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  async function saveTrainer(event: FormEvent) {
+    event.preventDefault();
+    const payload = {
+      ...trainerForm,
+      password: editingTrainerId && !trainerForm.password ? null : trainerForm.password,
+      hourlyRate: trainerForm.hourlyRate ? Number(trainerForm.hourlyRate) : null,
+      experienceYears: 0,
+      active: true,
+    };
+
+    try {
+      if (editingTrainerId) {
+        await api.updateTrainer(editingTrainerId, payload);
+      } else {
+        await api.createTrainer(payload);
+      }
+      resetTrainerForm();
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  async function createTrainingType(event: FormEvent) {
     event.preventDefault();
     try {
-      await api.createTrainer({
-        ...trainerForm,
-        hourlyRate: Number(trainerForm.hourlyRate || 0),
-        experienceYears: 0,
+      await api.createTrainingType({
+        ...trainingTypeForm,
+        durationMinutes: Number(trainingTypeForm.durationMinutes),
+        price: Number(trainingTypeForm.price),
         active: true,
       });
-      setTrainerForm({ email: '', password: '', firstName: '', lastName: '', bio: '', photoUrl: '', hourlyRate: '', specializationIds: [] });
+      setTrainingTypeForm({ name: '', description: '', durationMinutes: '90', price: '' });
       refresh();
     } catch (error) {
       onError(error);
@@ -622,29 +710,73 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
 
       <div className="row g-3">
         <div className="col-xl-4">
-          <form className="panel form-grid" onSubmit={createTrainer}>
-            <h3>Nowy trener</h3>
-            <input className="form-control" placeholder="Email" value={trainerForm.email} onChange={(e) => setTrainerForm({ ...trainerForm, email: e.target.value })} />
-            <input className="form-control" placeholder="Haslo" type="password" value={trainerForm.password} onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })} />
-            <input className="form-control" placeholder="Imie" value={trainerForm.firstName} onChange={(e) => setTrainerForm({ ...trainerForm, firstName: e.target.value })} />
-            <input className="form-control" placeholder="Nazwisko" value={trainerForm.lastName} onChange={(e) => setTrainerForm({ ...trainerForm, lastName: e.target.value })} />
-            <input className="form-control" placeholder="/uploads/trainers/kowalski.jpg" value={trainerForm.photoUrl} onChange={(e) => setTrainerForm({ ...trainerForm, photoUrl: e.target.value })} />
-            <input className="form-control" placeholder="Stawka" value={trainerForm.hourlyRate} onChange={(e) => setTrainerForm({ ...trainerForm, hourlyRate: e.target.value })} />
-            <textarea className="form-control" placeholder="Bio" value={trainerForm.bio} onChange={(e) => setTrainerForm({ ...trainerForm, bio: e.target.value })} />
+          <form className="panel form-grid" onSubmit={saveTrainer}>
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <h3 className="mb-0">{editingTrainerId ? 'Edycja trenera' : 'Nowy trener'}</h3>
+              {editingTrainerId && <button className="btn btn-sm btn-outline-light" type="button" onClick={resetTrainerForm}>Anuluj</button>}
+            </div>
+            <FieldLabel required>Email</FieldLabel>
+            <input className="form-control" value={trainerForm.email} onChange={(e) => setTrainerForm({ ...trainerForm, email: e.target.value })} type="email" />
+            <FieldLabel required={!editingTrainerId}>{editingTrainerId ? 'Nowe haslo opcjonalnie' : 'Haslo'}</FieldLabel>
+            <input className="form-control" type="password" value={trainerForm.password} onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })} />
+            <FieldLabel required>Imie</FieldLabel>
+            <input className="form-control" value={trainerForm.firstName} onChange={(e) => setTrainerForm({ ...trainerForm, firstName: e.target.value })} />
+            <FieldLabel required>Nazwisko</FieldLabel>
+            <input className="form-control" value={trainerForm.lastName} onChange={(e) => setTrainerForm({ ...trainerForm, lastName: e.target.value })} />
+            <FieldLabel>Zdjecie trenera</FieldLabel>
+            <div
+              className="file-drop"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void handlePhotoFile(event.dataTransfer.files[0]);
+              }}
+            >
+              {trainerForm.photoUrl && (
+                <img className="photo-preview" src={resolveMediaUrl(trainerForm.photoUrl)} alt="Podglad zdjecia trenera" />
+              )}
+              <input className="form-control" type="file" accept="image/*" onChange={(event) => void handlePhotoFile(event.target.files?.[0])} />
+              <small>{photoUploading ? 'Przesylanie zdjecia...' : 'Przeciagnij plik tutaj albo wybierz go z komputera.'}</small>
+            </div>
+            <FieldLabel>URL zdjecia</FieldLabel>
+            <input className="form-control" value={trainerForm.photoUrl} onChange={(e) => setTrainerForm({ ...trainerForm, photoUrl: e.target.value })} />
+            <FieldLabel>Stawka godzinowa</FieldLabel>
+            <input className="form-control" value={trainerForm.hourlyRate} onChange={(e) => setTrainerForm({ ...trainerForm, hourlyRate: e.target.value })} type="number" min="0" step="0.01" />
+            <FieldLabel>Bio</FieldLabel>
+            <textarea className="form-control" value={trainerForm.bio} onChange={(e) => setTrainerForm({ ...trainerForm, bio: e.target.value })} />
+            <FieldLabel required>Specjalizacje</FieldLabel>
             <select className="form-select" multiple value={trainerForm.specializationIds.map(String)} onChange={(e) => setTrainerForm({
               ...trainerForm,
               specializationIds: Array.from(e.target.selectedOptions).map((option) => Number(option.value)),
             })}>
               {specializations.map((specialization) => <option key={specialization.id} value={specialization.id}>{specialization.name}</option>)}
             </select>
-            <button className="btn btn-warning" type="submit">Utworz trenera</button>
+            <button className="btn btn-warning" type="submit">{editingTrainerId ? 'Zapisz trenera' : 'Utworz trenera'}</button>
+          </form>
+
+          <form className="panel form-grid mt-3" onSubmit={createTrainingType}>
+            <h3>Nowy typ treningu</h3>
+            <FieldLabel required>Nazwa</FieldLabel>
+            <input className="form-control" value={trainingTypeForm.name} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, name: e.target.value })} />
+            <FieldLabel>Opis</FieldLabel>
+            <textarea className="form-control" value={trainingTypeForm.description} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, description: e.target.value })} />
+            <FieldLabel required>Czas trwania w minutach</FieldLabel>
+            <input className="form-control" type="number" min="1" value={trainingTypeForm.durationMinutes} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, durationMinutes: e.target.value })} />
+            <FieldLabel required>Cena PLN</FieldLabel>
+            <input className="form-control" type="number" min="1" step="0.01" value={trainingTypeForm.price} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, price: e.target.value })} />
+            <button className="btn btn-warning" type="submit">Dodaj typ treningu</button>
           </form>
         </div>
         <div className="col-xl-8">
           <div className="panel">
             <h3>Trenerzy</h3>
             <div className="trainer-list">
-              {trainers.map((trainer) => <TrainerCard key={trainer.id} trainer={trainer} />)}
+              {trainers.map((trainer) => (
+                <div className="trainer-admin-item" key={trainer.id}>
+                  <TrainerCard trainer={trainer} />
+                  <button className="btn btn-sm btn-outline-warning" type="button" onClick={() => editTrainer(trainer)}>Edytuj</button>
+                </div>
+              ))}
             </div>
           </div>
           <div className="panel mt-3">
@@ -744,6 +876,15 @@ function Header({ eyebrow, title }: { eyebrow: string; title: string }) {
       <span>{eyebrow}</span>
       <h1>{title}</h1>
     </header>
+  );
+}
+
+function FieldLabel({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="field-label">
+      {children}
+      {required && <span aria-label="wymagane">*</span>}
+    </label>
   );
 }
 

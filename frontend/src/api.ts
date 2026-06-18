@@ -58,6 +58,32 @@ async function request<T>(path: string, method: Method = 'GET', data?: unknown):
   return response.json() as Promise<T>;
 }
 
+async function upload<T>(path: string, file: File): Promise<T> {
+  const token = localStorage.getItem('kuznia.token');
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let body: ApiErrorBody | null = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    throw new ApiError(response.status, body);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export const api = {
   login: (email: string, password: string) => request<AuthResponse>('/api/auth/login', 'POST', { email, password }),
   register: (payload: unknown) => request<AuthResponse>('/api/auth/register', 'POST', payload),
@@ -103,6 +129,7 @@ export const api = {
   adminTrainers: () => request<Trainer[]>('/api/admin/trainers'),
   createTrainer: (payload: unknown) => request<Trainer>('/api/admin/trainers', 'POST', payload),
   updateTrainer: (id: number, payload: unknown) => request<Trainer>(`/api/admin/trainers/${id}`, 'PUT', payload),
+  uploadTrainerPhoto: (file: File) => upload<{ url: string }>('/api/admin/uploads/trainer-photo', file),
   adminTrainingTypes: () => request<TrainingType[]>('/api/admin/training-types'),
   createTrainingType: (payload: unknown) => request<TrainingType>('/api/admin/training-types', 'POST', payload),
   adminStations: () => request<TrainingStation[]>('/api/admin/training-stations'),
