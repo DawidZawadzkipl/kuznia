@@ -12,6 +12,7 @@ public record TrainerResponse(
 		String phone,
 		boolean active,
 		String bio,
+		String photoUrl,
 		Integer experienceYears,
 		BigDecimal hourlyRate,
 		List<SpecializationResponse> specializations

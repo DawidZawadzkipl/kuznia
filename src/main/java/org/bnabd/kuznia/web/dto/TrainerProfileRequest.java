@@ -9,6 +9,7 @@ public record TrainerProfileRequest(
 		String lastName,
 		String phone,
 		String bio,
+		String photoUrl,
 		Integer experienceYears,
 		BigDecimal hourlyRate,
 		@NotEmpty Set<Long> specializationIds

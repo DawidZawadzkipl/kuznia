@@ -80,6 +80,7 @@ public class DtoMapper {
 				user.getPhone(),
 				user.isActive(),
 				trainer.getBio(),
+				trainer.getPhotoUrl(),
 				trainer.getExperienceYears(),
 				trainer.getHourlyRate(),
 				trainer.getSpecializations().stream()

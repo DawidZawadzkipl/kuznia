@@ -70,7 +70,14 @@ public class TrainerService {
 
 		TrainerProfile profile = new TrainerProfile();
 		profile.setUser(user);
-		applyTrainerFields(profile, request.bio(), request.experienceYears(), request.hourlyRate(), request.specializationIds());
+		applyTrainerFields(
+				profile,
+				request.bio(),
+				request.photoUrl(),
+				request.experienceYears(),
+				request.hourlyRate(),
+				request.specializationIds()
+		);
 		return trainerProfileRepository.save(profile);
 	}
 
@@ -94,7 +101,14 @@ public class TrainerService {
 			user.setActive(request.active());
 		}
 
-		applyTrainerFields(profile, request.bio(), request.experienceYears(), request.hourlyRate(), request.specializationIds());
+		applyTrainerFields(
+				profile,
+				request.bio(),
+				request.photoUrl(),
+				request.experienceYears(),
+				request.hourlyRate(),
+				request.specializationIds()
+		);
 		return profile;
 	}
 
@@ -109,18 +123,27 @@ public class TrainerService {
 			user.setLastName(request.lastName());
 		}
 		user.setPhone(request.phone());
-		applyTrainerFields(profile, request.bio(), request.experienceYears(), request.hourlyRate(), request.specializationIds());
+		applyTrainerFields(
+				profile,
+				request.bio(),
+				request.photoUrl(),
+				request.experienceYears(),
+				request.hourlyRate(),
+				request.specializationIds()
+		);
 		return profile;
 	}
 
 	private void applyTrainerFields(
 			TrainerProfile profile,
 			String bio,
+			String photoUrl,
 			Integer experienceYears,
 			java.math.BigDecimal hourlyRate,
 			Set<Long> specializationIds
 	) {
 		profile.setBio(bio);
+		profile.setPhotoUrl(photoUrl);
 		profile.setExperienceYears(experienceYears);
 		profile.setHourlyRate(hourlyRate);
 		profile.setSpecializations(loadSpecializations(specializationIds));

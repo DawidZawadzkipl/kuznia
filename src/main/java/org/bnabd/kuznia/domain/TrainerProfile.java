@@ -46,6 +46,9 @@ public class TrainerProfile {
 	@Column(columnDefinition = "text")
 	private String bio;
 
+	@Column(name = "photo_url", length = 500)
+	private String photoUrl;
+
 	@Column(name = "experience_years")
 	private Integer experienceYears;
 
