@@ -29,6 +29,11 @@ public class ApiExceptionHandler {
 		return error(HttpStatus.BAD_REQUEST, "Nieprawidlowe dane wejsciowe.");
 	}
 
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception) {
+		return error(HttpStatus.INTERNAL_SERVER_ERROR, "Wystapil nieoczekiwany blad serwera.");
+	}
+
 	private ResponseEntity<ErrorResponse> error(HttpStatus status, String message) {
 		return ResponseEntity.status(status)
 				.body(new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message));
