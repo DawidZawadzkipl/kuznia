@@ -3,11 +3,13 @@ package org.bnabd.kuznia.repository;
 import java.time.Instant;
 import java.util.List;
 import org.bnabd.kuznia.domain.TrainerAvailability;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TrainerAvailabilityRepository extends JpaRepository<TrainerAvailability, Long> {
+	@EntityGraph(attributePaths = {"trainerProfile"})
 	List<TrainerAvailability> findByTrainerProfile_IdOrderByStartTimeAsc(Long trainerId);
 
 	@Query("""
