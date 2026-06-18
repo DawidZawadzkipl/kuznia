@@ -47,6 +47,12 @@ const statusLabels: Record<string, string> = {
   COMPLETED: 'Zrealizowana',
 };
 
+const liftLabels: Record<string, string> = {
+  SQUAT: 'Przysiad',
+  BENCH_PRESS: 'Wyciskanie',
+  DEADLIFT: 'Martwy',
+};
+
 export function App() {
   const [token, setToken] = useState(localStorage.getItem('kuznia.token') ?? '');
   const [user, setUser] = useState<User | null>(() => {
@@ -916,26 +922,71 @@ function ReservationTable({ reservations, actions }: {
 }
 
 function ProgressPanel({ progress }: { progress: ProgressPoint[] }) {
-  const data = useMemo(() => progress.map((point) => ({
-    date: point.date,
-    value: point.estimatedOneRepMax,
-    lift: point.liftType,
-  })), [progress]);
+  const [chartMode, setChartMode] = useState<'TOTAL' | 'SQUAT' | 'BENCH_PRESS' | 'DEADLIFT'>('TOTAL');
+  const data = useMemo(() => buildProgressData(progress, chartMode), [progress, chartMode]);
 
   return (
     <div className="panel chart-panel">
-      <h3>Wykres progresu</h3>
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={data}>
-          <CartesianGrid stroke="#292929" />
-          <XAxis dataKey="date" stroke="#a3a3a3" />
-          <YAxis stroke="#a3a3a3" />
-          <Tooltip contentStyle={{ background: '#171717', border: '1px solid #3a3a3a' }} />
-          <Line type="monotone" dataKey="value" stroke="#f5c542" strokeWidth={3} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="chart-header">
+        <h3>Wykres progresu</h3>
+        <div className="segmented-control" aria-label="Zakres wykresu">
+          {(['TOTAL', 'SQUAT', 'BENCH_PRESS', 'DEADLIFT'] as const).map((mode) => (
+            <button
+              className={chartMode === mode ? 'active' : ''}
+              key={mode}
+              onClick={() => setChartMode(mode)}
+              type="button"
+            >
+              {mode === 'TOTAL' ? 'Total' : liftLabels[mode]}
+            </button>
+          ))}
+        </div>
+      </div>
+      {data.length === 0 ? (
+        <div className="empty-chart">Brak danych dla wybranego zakresu.</div>
+      ) : (
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={data}>
+            <CartesianGrid stroke="#292929" />
+            <XAxis dataKey="date" stroke="#a3a3a3" />
+            <YAxis stroke="#a3a3a3" />
+            <Tooltip contentStyle={{ background: '#171717', border: '1px solid #3a3a3a' }} />
+            <Line type="monotone" dataKey="value" stroke="#f5c542" strokeWidth={3} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
+}
+
+function buildProgressData(
+  progress: ProgressPoint[],
+  chartMode: 'TOTAL' | 'SQUAT' | 'BENCH_PRESS' | 'DEADLIFT',
+) {
+  const sorted = [...progress].sort((first, second) => first.date.localeCompare(second.date));
+  if (chartMode !== 'TOTAL') {
+    return sorted
+      .filter((point) => point.liftType === chartMode)
+      .map((point) => ({
+        date: point.date,
+        value: point.estimatedOneRepMax,
+        label: liftLabels[point.liftType],
+      }));
+  }
+
+  const best = {
+    SQUAT: 0,
+    BENCH_PRESS: 0,
+    DEADLIFT: 0,
+  };
+  return sorted.map((point) => {
+    best[point.liftType] = Math.max(best[point.liftType], Number(point.estimatedOneRepMax));
+    return {
+      date: point.date,
+      value: best.SQUAT + best.BENCH_PRESS + best.DEADLIFT,
+      label: 'Total',
+    };
+  });
 }
 
 function Header({ eyebrow, title }: { eyebrow: string; title: string }) {

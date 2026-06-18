@@ -49,7 +49,7 @@ public class ReservationService {
 			throw new DomainException("Ten termin jest juz zajety.");
 		}
 
-		TrainerProfile trainer = trainerProfileRepository.findById(trainerId)
+		TrainerProfile trainer = trainerProfileRepository.findWithUserAndSpecializationsById(trainerId)
 				.orElseThrow(() -> new DomainException("Nie znaleziono trenera."));
 		if (availabilityRepository.findMatchingAvailability(trainerId, startTime, endTime).isEmpty()) {
 			throw new DomainException("Trener nie oznaczyl tego terminu jako dostepnego.");
