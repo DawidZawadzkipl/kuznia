@@ -1,21 +1,25 @@
-# kuznia
+# Kuznia
+
+Aplikacja do zarzadzania treningami w silowni trojbojowej.
+
 ![Database schema](docs/images/db_diagram.png)
 
-## Backend
+## Wymagania
 
-Start PostgreSQL:
+- Docker Desktop
+- Java 21
+- Maven Wrapper z repo albo Maven lokalnie
+- Node.js i npm
 
-```bash
+## Baza danych
+
+Uruchom PostgreSQL z Dockera:
+
+```powershell
 docker compose up -d
 ```
 
-Run the application:
-
-```bash
-./mvnw spring-boot:run
-```
-
-Default local database settings:
+Domyslne ustawienia lokalnej bazy:
 
 - database: `kuznia`
 - user: `kuznia`
@@ -23,24 +27,73 @@ Default local database settings:
 - host port: `5433`
 - container port: `5432`
 
-Application URL:
+## Backend
 
-- `http://localhost:8082`
+Backend startuje na porcie `8082`.
+
+### IntelliJ IDEA
+
+1. Otworz projekt w IntelliJ.
+2. Uruchom klase `org.bnabd.kuznia.KuzniaApplication`.
+3. Upewnij sie, ze Docker/PostgreSQL dziala przed startem aplikacji.
+
+### Maven
+
+Windows:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Linux/macOS:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Adresy:
+
+- API: `http://localhost:8082`
 - Swagger UI: `http://localhost:8082/swagger-ui/index.html`
 
-Seeded admin account:
+## Frontend
 
-- email: `admin@kuznia.local`
-- password: `Admin123!`
+Frontend jest w katalogu `frontend`.
 
-## API testing
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
-1. Log in with `POST /api/auth/login`.
-2. Copy the `token` value from the response.
-3. In Swagger, click `Authorize` and use:
+Aplikacja frontendowa:
+
+- `http://127.0.0.1:5173`
+
+Vite proxy przekierowuje `/api` oraz `/uploads` na backend:
+
+- `http://localhost:8082`
+
+## Seedowane konta
+
+Hasla i konta tworza sie automatycznie przy starcie backendu, jesli nie istnieja jeszcze w bazie.
+
+| Rola | Email | Haslo |
+| --- | --- | --- |
+| Admin | `admin@kuznia.local` | `Admin123!` |
+| Trener | `marek.sila@kuznia.local` | `Trainer123!` |
+| Trener | `ewa.lawka@kuznia.local` | `Trainer123!` |
+| Klient | `jan.kowalski@kuznia.local` | `Client123!` |
+| Klient | `anna.nowak@kuznia.local` | `Client123!` |
+
+## Testowanie API
+
+1. Zaloguj sie przez `POST /api/auth/login`.
+2. Skopiuj `token` z odpowiedzi.
+3. W Swaggerze kliknij `Authorize` i wpisz:
 
 ```text
 Bearer <token>
 ```
 
-Public endpoints are available under `/api/public/**`.
+Publiczne endpointy sa pod `/api/public/**`.
