@@ -39,6 +39,7 @@ public class AvailabilityService {
 		return findByTrainer(trainerId).stream()
 				.filter(TrainerAvailability::isAvailable)
 				.flatMap(availability -> slotsForAvailability(trainerId, availability, now).stream())
+				.distinct()
 				.toList();
 	}
 
@@ -46,6 +47,9 @@ public class AvailabilityService {
 	public TrainerAvailability create(Long trainerId, AvailabilityRequest request) {
 		if (!request.endTime().isAfter(request.startTime())) {
 			throw new DomainException("Koniec dostepnosci musi byc po starcie.");
+		}
+		if (request.available() == null || request.available()) {
+			ensureNoAvailabilityOverlap(trainerId, request.startTime(), request.endTime(), null);
 		}
 		TrainerProfile trainer = trainerProfileRepository.findById(trainerId)
 				.orElseThrow(() -> new DomainException("Nie znaleziono trenera."));
@@ -73,10 +77,17 @@ public class AvailabilityService {
 
 	@Transactional
 	public TrainerAvailability updateForTrainer(Long trainerId, Long id, AvailabilityRequest request) {
-		TrainerAvailability availability = update(id, request);
+		TrainerAvailability availability = availabilityRepository.findById(id)
+				.orElseThrow(() -> new DomainException("Nie znaleziono dostepnosci."));
 		if (!availability.getTrainerProfile().getId().equals(trainerId)) {
 			throw new DomainException("To nie jest dostepnosc tego trenera.");
 		}
+		if (request.available() == null || request.available()) {
+			ensureNoAvailabilityOverlap(trainerId, request.startTime(), request.endTime(), id);
+		}
+		availability.setStartTime(request.startTime());
+		availability.setEndTime(request.endTime());
+		availability.setAvailable(request.available() == null || request.available());
 		return availability;
 	}
 
@@ -95,5 +106,15 @@ public class AvailabilityService {
 
 	private boolean hasBlockingReservation(Long trainerId, Instant startTime, Instant endTime) {
 		return reservationRepository.countOverlappingReservations(trainerId, startTime, endTime, BLOCKING_STATUSES) > 0;
+	}
+
+	private void ensureNoAvailabilityOverlap(Long trainerId, Instant startTime, Instant endTime, Long ignoredAvailabilityId) {
+		boolean overlaps = findByTrainer(trainerId).stream()
+				.filter(TrainerAvailability::isAvailable)
+				.filter(existing -> ignoredAvailabilityId == null || !existing.getId().equals(ignoredAvailabilityId))
+				.anyMatch(existing -> existing.getStartTime().isBefore(endTime) && existing.getEndTime().isAfter(startTime));
+		if (overlaps) {
+			throw new DomainException("Ten zakres dostepnosci naklada sie na istniejacy termin.");
+		}
 	}
 }

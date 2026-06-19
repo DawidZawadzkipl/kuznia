@@ -126,7 +126,7 @@ public class TrainerService {
 		applyTrainerFields(
 				profile,
 				request.bio(),
-				request.photoUrl(),
+				profile.getPhotoUrl(),
 				request.experienceYears(),
 				request.hourlyRate(),
 				request.specializationIds()
