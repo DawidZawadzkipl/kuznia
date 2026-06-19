@@ -184,6 +184,140 @@ textarea {
   width: 100%;
 }
 
+.landing-page {
+  display: grid;
+  gap: 34px;
+}
+
+.landing-hero {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #050505;
+  isolation: isolate;
+}
+
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/landing-barbell.png");
+  background-repeat: no-repeat;
+  background-position: center 54%;
+  background-size: min(1120px, 92%) auto;
+  filter: invert(1) grayscale(1);
+  opacity: 0.28;
+  z-index: -2;
+}
+
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.58);
+  z-index: -1;
+}
+
+.landing-hero-content {
+  min-height: 420px;
+  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(28px, 5vw, 72px);
+}
+
+.landing-hero-content span,
+.landing-section .page-header span {
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: var(--yellow);
+}
+
+.landing-hero-content h1 {
+  margin: 8px 0 12px;
+  font-size: clamp(3rem, 7vw, 6.5rem);
+  line-height: 0.95;
+  font-weight: 900;
+}
+
+.landing-hero-content p {
+  max-width: 680px;
+  color: #ededed;
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  line-height: 1.65;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.landing-facts {
+  position: absolute;
+  right: clamp(20px, 4vw, 48px);
+  bottom: clamp(20px, 4vw, 42px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 10px;
+  width: min(520px, calc(100% - 40px));
+}
+
+.landing-facts div {
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid rgba(245, 197, 66, 0.38);
+  border-radius: 8px;
+  background: rgba(14, 14, 14, 0.78);
+}
+
+.landing-facts strong,
+.landing-facts span {
+  display: block;
+}
+
+.landing-facts strong {
+  color: var(--yellow);
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.landing-facts span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.landing-section {
+  scroll-margin-top: 24px;
+}
+
+.notice-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  border-radius: 8px;
+  background: #1d180c;
+  color: var(--yellow);
+  font-weight: 800;
+}
+
+.notice-panel button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+}
+
 .page-header {
   margin-bottom: 22px;
 }
@@ -406,6 +540,13 @@ textarea {
   gap: 12px;
 }
 
+.list-line span small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .icon-button {
   width: 34px;
   height: 34px;
@@ -509,11 +650,49 @@ textarea {
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .landing-hero {
+    min-height: auto;
+  }
+
+  .landing-hero-content {
+    min-height: 360px;
+  }
+
+  .landing-facts {
+    position: static;
+    width: auto;
+    margin: 0 24px 24px;
+  }
 }
 
 @media (max-width: 620px) {
   .main-content {
     padding: 18px;
+  }
+
+  .landing-page {
+    gap: 26px;
+  }
+
+  .landing-hero::before {
+    background-position: center 42%;
+    background-size: 125% auto;
+    opacity: 0.22;
+  }
+
+  .landing-hero-content {
+    min-height: 340px;
+    padding: 28px 22px;
+  }
+
+  .landing-actions {
+    display: grid;
+  }
+
+  .landing-facts {
+    grid-template-columns: 1fr;
+    margin: 0 18px 18px;
   }
 
   .trainer-card {

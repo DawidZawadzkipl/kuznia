@@ -137,6 +137,16 @@ export interface TrainingNote {
   createdAt: string;
 }
 
+export interface Certificate {
+  id: number;
+  trainerId: number;
+  name: string;
+  issuingOrganization: string;
+  issueDate: string;
+  expirationDate?: string;
+  certificateNumber?: string;
+}
+
 export interface AdminStats {
   users: number;
   trainers: number;

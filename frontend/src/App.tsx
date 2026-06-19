@@ -10,7 +10,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -25,6 +25,7 @@ import type {
   AdminStats,
   Availability,
   AvailableSlot,
+  Certificate,
   LiftResult,
   LiftType,
   ProgressPoint,
@@ -32,12 +33,14 @@ import type {
   Role,
   Specialization,
   Trainer,
+  TrainingNote,
+  TrainingStation,
   TrainingType,
   User,
 } from './types';
 
 type View = 'public' | 'client' | 'trainer' | 'admin' | 'profile';
-type UiError = { status: 400 | 403 | 500; message: string };
+type UiError = { status: 401 | 500; message: string };
 
 const statusLabels: Record<string, string> = {
   PENDING: 'Oczekuje',
@@ -61,6 +64,7 @@ export function App() {
   });
   const [view, setView] = useState<View>('public');
   const [uiError, setUiError] = useState<UiError | null>(null);
+  const [notice, setNotice] = useState('');
 
   const authenticated = Boolean(token && user);
 
@@ -72,19 +76,23 @@ export function App() {
     setView(defaultView(authUser.role));
   }
 
-  function logout() {
+  const logout = useCallback(() => {
     localStorage.removeItem('kuznia.token');
     localStorage.removeItem('kuznia.user');
     setToken('');
     setUser(null);
     setView('public');
-  }
+  }, []);
 
-  function handleApiError(error: unknown) {
+  const handleApiError = useCallback((error: unknown) => {
     if (error instanceof ApiError) {
-      if (error.status === 401 || error.status === 403) {
+      if (error.status === 401) {
         logout();
-        setUiError({ status: 403, message: 'Brak dostepu do tej operacji. Zaloguj sie ponownie na konto z odpowiednia rola.' });
+        setUiError({ status: 401, message: 'Sesja wygasla albo token jest nieprawidlowy. Zaloguj sie ponownie.' });
+        return;
+      }
+      if (error.status === 403) {
+        setNotice(error.body?.message ?? 'Brak dostepu do tej operacji dla aktualnej roli.');
         return;
       }
       if (error.status >= 500) {
@@ -92,12 +100,12 @@ export function App() {
         return;
       }
       if (error.status >= 400) {
-        setUiError({ status: 400, message: error.body?.message ?? 'Nie udalo sie wykonac operacji.' });
+        setNotice(error.body?.message ?? 'Nie udalo sie wykonac operacji.');
         return;
       }
     }
     setUiError({ status: 500, message: 'Wystapil nieoczekiwany blad aplikacji.' });
-  }
+  }, [logout]);
 
   if (uiError) {
     return <ErrorView error={uiError} onBack={() => setUiError(null)} />;
@@ -161,12 +169,22 @@ export function App() {
       </aside>
 
       <main className="main-content">
+        {notice && <Notice message={notice} onClose={() => setNotice('')} />}
         {view === 'public' && <PublicView />}
         {view === 'profile' && user && <ProfileView user={user} setUser={setUser} onError={handleApiError} />}
         {view === 'client' && user?.role === 'CLIENT' && <ClientDashboard onError={handleApiError} />}
         {view === 'trainer' && user?.role === 'TRAINER' && <TrainerDashboard onError={handleApiError} />}
         {view === 'admin' && user?.role === 'ADMIN' && <AdminDashboard onError={handleApiError} />}
       </main>
+    </div>
+  );
+}
+
+function Notice({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <div className="notice-panel">
+      <span>{message}</span>
+      <button type="button" onClick={onClose}>Zamknij</button>
     </div>
   );
 }
@@ -201,17 +219,23 @@ function AuthPanel({ onAuth, onError }: {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
+    setFormError('');
     try {
       const response = mode === 'login'
         ? await api.login(email, password)
         : await api.register({ email, password, firstName, lastName, phone });
       onAuth(response.token, response.user);
     } catch (error) {
+      if (error instanceof ApiError && error.status < 500) {
+        setFormError(error.body?.message ?? 'Nie udalo sie zalogowac. Sprawdz dane i sprobuj ponownie.');
+        return;
+      }
       onError(error);
     } finally {
       setLoading(false);
@@ -228,6 +252,7 @@ function AuthPanel({ onAuth, onError }: {
       <input className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
       <FieldLabel required>Haslo</FieldLabel>
       <input className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
+      {formError && <div className="alert alert-warning mb-0">{formError}</div>}
       {mode === 'register' && (
         <>
           <FieldLabel required>Imie</FieldLabel>
@@ -251,7 +276,7 @@ function ErrorView({ error, onBack }: { error: UiError; onBack: () => void }) {
       <div className="error-card">
         <AlertTriangle size={44} />
         <span className="error-code">{error.status}</span>
-        <h1>{error.status === 500 ? 'Blad serwera' : error.status === 403 ? 'Brak dostepu' : 'Nieudane zadanie'}</h1>
+        <h1>{error.status === 500 ? 'Blad serwera' : 'Sesja wygasla'}</h1>
         <p>{error.message}</p>
         <button className="btn btn-warning" type="button" onClick={onBack}>Wroc do aplikacji</button>
       </div>
@@ -275,28 +300,85 @@ function PublicView() {
 	}, []);
 
 	return (
-		<section>
-			<Header eyebrow="Publiczna oferta" title="Trenerzy, terminy i treningi" />
+		<section className="landing-page">
+      <div className="landing-hero">
+        <div className="landing-hero-content">
+          <span>Kuznia Trojboju</span>
+          <h1>Kuznia</h1>
+          <p>Tutaj toczymy najciezsze boje. Pracujemy nad przysiadem, wyciskaniem i martwym ciagiem w warunkach, w ktorych liczy sie technika, progres i spokojna glowa pod sztanga.</p>
+          <div className="landing-actions">
+            <a className="btn btn-warning" href="#trenerzy">Poznaj trenerow</a>
+            <a className="btn btn-outline-warning" href="#treningi">Zobacz treningi</a>
+          </div>
+        </div>
+        <div className="landing-facts" aria-label="Najwazniejsze informacje">
+          <div>
+            <strong>90 min</strong>
+            <span>jedna sesja</span>
+          </div>
+          <div>
+            <strong>3 boje</strong>
+            <span>przysiad, lawka, martwy</span>
+          </div>
+          <div>
+            <strong>1 cel</strong>
+            <span>mocniejszy wynik</span>
+          </div>
+        </div>
+      </div>
+
 			{loadError && (
 				<div className="panel border-warning mb-3">
 					<strong className="text-warning">Nie mozna pobrac danych.</strong>
 					<p className="mb-0 mt-2">{loadError}</p>
 				</div>
 			)}
-			<div className="row g-3 mb-4">
-        {trainingTypes.map((type) => (
-          <div className="col-md-4" key={type.id}>
+
+      <div className="landing-section">
+        <Header eyebrow="Jak trenujemy" title="Ciezka praca, proste zasady" />
+        <div className="row g-3">
+          <div className="col-lg-4">
             <div className="panel h-100">
-              <small className="text-warning">{type.durationMinutes} min</small>
-              <h3>{type.name}</h3>
-              <p>{type.description}</p>
-              <strong>{type.price} PLN</strong>
+              <h3>Silownia trojbojowa</h3>
+              <p>Przestrzen do pracy nad przysiadem, wyciskaniem lezac i martwym ciagiem pod okiem trenerow.</p>
             </div>
           </div>
-        ))}
+          <div className="col-lg-4">
+            <div className="panel h-100">
+              <h3>Sesje 90 minut</h3>
+              <p>Kazdy termin rezerwacji jest liczony jako pelna sesja techniczna albo konsultacyjna.</p>
+            </div>
+          </div>
+          <div className="col-lg-4">
+            <div className="panel h-100">
+              <h3>Progres i historia</h3>
+              <p>Klient zapisuje wyniki bojow, obserwuje total i wraca do historii treningow.</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="trainer-grid">
-        {trainers.map((trainer) => <TrainerCard key={trainer.id} trainer={trainer} />)}
+
+      <div className="landing-section" id="treningi">
+        <Header eyebrow="Rodzaje treningow" title="Wybierz rodzaj pracy" />
+			  <div className="row g-3">
+          {trainingTypes.map((type) => (
+            <div className="col-md-4" key={type.id}>
+              <div className="panel h-100">
+                <small className="text-warning">{type.durationMinutes} min</small>
+                <h3>{type.name}</h3>
+                <p>{type.description}</p>
+                <strong>{type.price} PLN</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="landing-section" id="trenerzy">
+        <Header eyebrow="Trenerzy" title="Specjalizacje pod konkretne boje" />
+        <div className="trainer-grid">
+          {trainers.map((trainer) => <TrainerCard key={trainer.id} trainer={trainer} />)}
+        </div>
       </div>
     </section>
   );
@@ -363,11 +445,13 @@ function ProfileView({ user, setUser, onError }: {
 
 function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [history, setHistory] = useState<Reservation[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [trainingTypes, setTrainingTypes] = useState<TrainingType[]>([]);
   const [results, setResults] = useState<LiftResult[]>([]);
   const [progress, setProgress] = useState<ProgressPoint[]>([]);
   const [total, setTotal] = useState({ total: 0, squat: 0, benchPress: 0, deadlift: 0 });
+  const [notes, setNotes] = useState<TrainingNote[]>([]);
 
   const [trainerId, setTrainerId] = useState('');
   const [trainingTypeId, setTrainingTypeId] = useState('');
@@ -384,19 +468,23 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
   const refresh = () => {
     Promise.all([
       api.clientReservations(),
+      api.clientHistory(),
       api.publicTrainers(),
       api.trainingTypes(),
       api.liftResults(),
       api.progress(),
       api.total(),
+      api.clientNotes(),
     ])
-      .then(([reservationData, trainerData, typeData, resultData, progressData, totalData]) => {
+      .then(([reservationData, historyData, trainerData, typeData, resultData, progressData, totalData, noteData]) => {
         setReservations(reservationData);
+        setHistory(historyData);
         setTrainers(trainerData);
         setTrainingTypes(typeData);
         setResults(resultData);
         setProgress(progressData);
         setTotal(totalData);
+        setNotes(noteData);
       })
       .catch(onError);
   };
@@ -507,6 +595,27 @@ function ClientDashboard({ onError }: { onError: (error: unknown) => void }) {
       </div>
 
       <div className="row g-3 mt-1">
+        <div className="col-lg-6">
+          <div className="panel">
+            <h3>Historia treningow</h3>
+            <ReservationMiniList reservations={history} empty="Brak zrealizowanych treningow." />
+          </div>
+        </div>
+        <div className="col-lg-6">
+          <div className="panel">
+            <h3>Notatki od trenera</h3>
+            {notes.length === 0 && <p className="text-muted mb-0">Brak notatek treningowych.</p>}
+            {notes.map((note) => (
+              <div className="list-line align-items-start" key={note.id}>
+                <span>{note.note}</span>
+                <small>{formatDate(note.createdAt)}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 mt-1">
         <div className="col-lg-4">
           <form className="panel form-grid" onSubmit={addResult}>
             <h3>Dodaj wynik</h3>
@@ -561,21 +670,78 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
   const [clients, setClients] = useState<User[]>([]);
+  const [specializations, setSpecializations] = useState<Specialization[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [clientResults, setClientResults] = useState<LiftResult[]>([]);
+  const [clientProgress, setClientProgress] = useState<ProgressPoint[]>([]);
+  const [notes, setNotes] = useState<TrainingNote[]>([]);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [profileForm, setProfileForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    bio: '',
+    hourlyRate: '',
+    specializationIds: [] as number[],
+  });
+  const [noteForm, setNoteForm] = useState({ reservationId: '', note: '' });
 
   const refresh = () => {
-    Promise.all([api.trainerProfile(), api.trainerReservations(), api.trainerAvailability(), api.trainerClients()])
-      .then(([profileData, reservationData, availabilityData, clientData]) => {
+    Promise.all([
+      api.trainerProfile(),
+      api.trainerReservations(),
+      api.trainerAvailability(),
+      api.trainerClients(),
+      api.specializations(),
+      api.trainerNotes(),
+    ])
+      .then(([profileData, reservationData, availabilityData, clientData, specializationData, noteData]) => {
         setProfile(profileData);
         setReservations(reservationData);
         setAvailability(availabilityData);
         setClients(clientData);
+        setSpecializations(specializationData);
+        setNotes(noteData);
+        setProfileForm({
+          firstName: profileData.firstName,
+          lastName: profileData.lastName,
+          phone: profileData.phone ?? '',
+          bio: profileData.bio ?? '',
+          hourlyRate: profileData.hourlyRate ? String(profileData.hourlyRate) : '',
+          specializationIds: profileData.specializations.map((specialization) => specialization.id),
+        });
       })
       .catch(onError);
   };
 
   useEffect(refresh, [onError]);
+
+  useEffect(() => {
+    if (!selectedClientId) {
+      setClientResults([]);
+      setClientProgress([]);
+      return;
+    }
+    Promise.all([
+      api.trainerClientLiftResults(Number(selectedClientId)),
+      api.trainerClientProgress(Number(selectedClientId)),
+    ])
+      .then(([resultData, progressData]) => {
+        setClientResults(resultData);
+        setClientProgress(progressData);
+      })
+      .catch(onError);
+  }, [selectedClientId, onError]);
+
+  function toggleOwnSpecialization(specializationId: number) {
+    setProfileForm((current) => ({
+      ...current,
+      specializationIds: current.specializationIds.includes(specializationId)
+        ? current.specializationIds.filter((id) => id !== specializationId)
+        : [...current.specializationIds, specializationId],
+    }));
+  }
 
   async function addAvailability(event: FormEvent) {
     event.preventDefault();
@@ -591,11 +757,65 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
     }
   }
 
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const updated = await api.updateTrainerProfile({
+        ...profileForm,
+        hourlyRate: profileForm.hourlyRate ? Number(profileForm.hourlyRate) : null,
+      });
+      setProfile(updated);
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  async function addTrainingNote(event: FormEvent) {
+    event.preventDefault();
+    try {
+      await api.addNote({ reservationId: Number(noteForm.reservationId), note: noteForm.note });
+      setNoteForm({ reservationId: '', note: '' });
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  const completedReservations = reservations.filter((reservation) => reservation.status === 'COMPLETED');
+
   return (
     <section>
       <Header eyebrow="Panel trenera" title={profile ? `${profile.firstName} ${profile.lastName}` : 'Trener'} />
       <div className="row g-3">
         <div className="col-lg-4">
+          <form className="panel form-grid mb-3" onSubmit={saveProfile}>
+            <h3>Profil trenera</h3>
+            <FieldLabel required>Imie</FieldLabel>
+            <input className="form-control" value={profileForm.firstName} onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })} required />
+            <FieldLabel required>Nazwisko</FieldLabel>
+            <input className="form-control" value={profileForm.lastName} onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })} required />
+            <FieldLabel>Telefon</FieldLabel>
+            <input className="form-control" value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} />
+            <FieldLabel>Bio</FieldLabel>
+            <textarea className="form-control" value={profileForm.bio} onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })} />
+            <FieldLabel>Stawka</FieldLabel>
+            <input className="form-control" type="number" min="0" step="0.01" value={profileForm.hourlyRate} onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: e.target.value })} />
+            <FieldLabel required>Specjalizacje</FieldLabel>
+            <div className="check-grid">
+              {specializations.map((specialization) => (
+                <label className="check-option" key={specialization.id}>
+                  <input
+                    checked={profileForm.specializationIds.includes(specialization.id)}
+                    onChange={() => toggleOwnSpecialization(specialization.id)}
+                    type="checkbox"
+                  />
+                  <span>{specialization.name}</span>
+                </label>
+              ))}
+            </div>
+            <button className="btn btn-warning" type="submit">Zapisz profil</button>
+          </form>
           <form className="panel form-grid" onSubmit={addAvailability}>
             <h3>Dostepnosc</h3>
             <FieldLabel required>Poczatek</FieldLabel>
@@ -606,7 +826,10 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
           </form>
           <div className="panel mt-3">
             <h3>Podopieczni</h3>
-            {clients.map((client) => <p key={client.id}>{client.firstName} {client.lastName}</p>)}
+            <select className="form-select" value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}>
+              <option value="">Wybierz podopiecznego</option>
+              {clients.map((client) => <option key={client.id} value={client.id}>{client.firstName} {client.lastName}</option>)}
+            </select>
           </div>
         </div>
         <div className="col-lg-8">
@@ -619,10 +842,56 @@ function TrainerDashboard({ onError }: { onError: (error: unknown) => void }) {
                 </>
               )}
               {reservation.status === 'CONFIRMED' && (
-                <button className="btn btn-sm btn-warning" onClick={() => api.completeReservation(reservation.id).then(refresh).catch(onError)}>Zrealizuj</button>
+                <>
+                  <button className="btn btn-sm btn-warning" onClick={() => api.completeReservation(reservation.id).then(refresh).catch(onError)}>Zrealizuj</button>
+                  <button className="btn btn-sm btn-outline-warning" onClick={() => api.cancelTrainerReservation(reservation.id).then(refresh).catch(onError)}>Anuluj</button>
+                </>
               )}
             </div>
           )} />
+          <div className="row g-3 mt-1">
+            <div className="col-lg-6">
+              <div className="panel h-100">
+                <h3>Wyniki podopiecznego</h3>
+                {!selectedClientId && <p className="text-muted mb-0">Wybierz podopiecznego z listy.</p>}
+                {selectedClientId && clientResults.length === 0 && <p className="text-muted mb-0">Brak wynikow.</p>}
+                {clientResults.slice(-6).reverse().map((result) => (
+                  <div className="list-line" key={result.id}>
+                    <span>{result.resultDate} / {result.liftDisplayName}</span>
+                    <strong>{result.estimatedOneRepMax} kg</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="col-lg-6">
+              <ProgressPanel progress={clientProgress} />
+            </div>
+          </div>
+          <form className="panel form-grid mt-3" onSubmit={addTrainingNote}>
+            <h3>Notatka treningowa</h3>
+            <FieldLabel required>Rezerwacja</FieldLabel>
+            <select className="form-select" value={noteForm.reservationId} onChange={(e) => setNoteForm({ ...noteForm, reservationId: e.target.value })} required>
+              <option value="">{completedReservations.length ? 'Wybierz zrealizowany trening' : 'Brak zrealizowanego treningu'}</option>
+              {completedReservations.map((reservation) => (
+                <option key={reservation.id} value={reservation.id}>
+                  {formatDate(reservation.startTime)} - {reservation.clientName}
+                </option>
+              ))}
+            </select>
+            <FieldLabel required>Notatka</FieldLabel>
+            <textarea className="form-control" value={noteForm.note} onChange={(e) => setNoteForm({ ...noteForm, note: e.target.value })} required />
+            <button className="btn btn-warning" disabled={completedReservations.length === 0} type="submit">Dodaj notatke</button>
+          </form>
+          <div className="panel mt-3">
+            <h3>Ostatnie notatki</h3>
+            {notes.length === 0 && <p className="text-muted mb-0">Brak notatek.</p>}
+            {notes.slice(0, 5).map((note) => (
+              <div className="list-line align-items-start" key={note.id}>
+                <span>{note.note}</span>
+                <small>{formatDate(note.createdAt)}</small>
+              </div>
+            ))}
+          </div>
           <div className="panel mt-3">
             <h3>Nadchodzaca dostepnosc</h3>
             {availability.map((slot) => (
@@ -644,7 +913,14 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [specializations, setSpecializations] = useState<Specialization[]>([]);
   const [trainingTypes, setTrainingTypes] = useState<TrainingType[]>([]);
+  const [stations, setStations] = useState<TrainingStation[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [editingTrainerId, setEditingTrainerId] = useState<number | null>(null);
+  const [editingTrainingTypeId, setEditingTrainingTypeId] = useState<number | null>(null);
+  const [editingSpecializationId, setEditingSpecializationId] = useState<number | null>(null);
+  const [editingStationId, setEditingStationId] = useState<number | null>(null);
+  const [editingCertificateId, setEditingCertificateId] = useState<number | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
 
   const [trainerForm, setTrainerForm] = useState({
@@ -663,21 +939,37 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
     durationMinutes: '90',
     price: '',
   });
+  const [specializationForm, setSpecializationForm] = useState({ name: '', description: '' });
+  const [stationForm, setStationForm] = useState({ name: '', description: '' });
+  const [certificateForm, setCertificateForm] = useState({
+    trainerId: '',
+    name: '',
+    issuingOrganization: '',
+    issueDate: '',
+    expirationDate: '',
+    certificateNumber: '',
+  });
 
   const refresh = () => {
     Promise.all([
       api.adminStats(),
       api.adminUsers(),
       api.adminTrainers(),
-      api.specializations(),
+      api.adminSpecializations(),
       api.adminTrainingTypes(),
+      api.adminStations(),
+      api.adminCertificates(),
+      api.adminReservations(),
     ])
-      .then(([statsData, userData, trainerData, specializationData, typeData]) => {
+      .then(([statsData, userData, trainerData, specializationData, typeData, stationData, certificateData, reservationData]) => {
         setStats(statsData);
         setUsers(userData);
         setTrainers(trainerData);
         setSpecializations(specializationData);
         setTrainingTypes(typeData);
+        setStations(stationData);
+        setCertificates(certificateData);
+        setReservations(reservationData);
       })
       .catch(onError);
   };
@@ -751,17 +1043,116 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
   async function createTrainingType(event: FormEvent) {
     event.preventDefault();
     try {
-      await api.createTrainingType({
+      const payload = {
         ...trainingTypeForm,
         durationMinutes: 90,
         price: Number(trainingTypeForm.price),
         active: true,
-      });
-      setTrainingTypeForm({ name: '', description: '', durationMinutes: '90', price: '' });
+      };
+      if (editingTrainingTypeId) {
+        await api.updateTrainingType(editingTrainingTypeId, payload);
+      } else {
+        await api.createTrainingType(payload);
+      }
+      resetTrainingTypeForm();
       refresh();
     } catch (error) {
       onError(error);
     }
+  }
+
+  function resetTrainingTypeForm() {
+    setEditingTrainingTypeId(null);
+    setTrainingTypeForm({ name: '', description: '', durationMinutes: '90', price: '' });
+  }
+
+  function editTrainingType(type: TrainingType) {
+    setEditingTrainingTypeId(type.id);
+    setTrainingTypeForm({
+      name: type.name,
+      description: type.description ?? '',
+      durationMinutes: '90',
+      price: String(type.price),
+    });
+  }
+
+  async function saveSpecialization(event: FormEvent) {
+    event.preventDefault();
+    try {
+      if (editingSpecializationId) {
+        await api.updateSpecialization(editingSpecializationId, specializationForm);
+      } else {
+        await api.createSpecialization(specializationForm);
+      }
+      setEditingSpecializationId(null);
+      setSpecializationForm({ name: '', description: '' });
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  function editSpecialization(specialization: Specialization) {
+    setEditingSpecializationId(specialization.id);
+    setSpecializationForm({ name: specialization.name, description: specialization.description ?? '' });
+  }
+
+  async function saveStation(event: FormEvent) {
+    event.preventDefault();
+    const payload = { ...stationForm, active: true };
+    try {
+      if (editingStationId) {
+        await api.updateStation(editingStationId, payload);
+      } else {
+        await api.createStation(payload);
+      }
+      setEditingStationId(null);
+      setStationForm({ name: '', description: '' });
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  function editStation(station: TrainingStation) {
+    setEditingStationId(station.id);
+    setStationForm({ name: station.name, description: station.description ?? '' });
+  }
+
+  async function saveCertificate(event: FormEvent) {
+    event.preventDefault();
+    const payload = {
+      trainerId: Number(certificateForm.trainerId),
+      name: certificateForm.name,
+      issuingOrganization: certificateForm.issuingOrganization,
+      issueDate: certificateForm.issueDate,
+      expirationDate: certificateForm.expirationDate || null,
+      certificateNumber: certificateForm.certificateNumber,
+    };
+    try {
+      if (editingCertificateId) {
+        await api.updateCertificate(editingCertificateId, payload);
+      } else {
+        await api.createCertificate(payload);
+      }
+      setEditingCertificateId(null);
+      setCertificateForm({ trainerId: '', name: '', issuingOrganization: '', issueDate: '', expirationDate: '', certificateNumber: '' });
+      refresh();
+    } catch (error) {
+      onError(error);
+    }
+  }
+
+  function editCertificate(certificate: Certificate) {
+    setEditingCertificateId(certificate.id);
+    setCertificateForm({
+      trainerId: String(certificate.trainerId),
+      name: certificate.name,
+      issuingOrganization: certificate.issuingOrganization,
+      issueDate: certificate.issueDate,
+      expirationDate: certificate.expirationDate ?? '',
+      certificateNumber: certificate.certificateNumber ?? '',
+    });
   }
 
   return (
@@ -806,8 +1197,6 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
               <input className="form-control" type="file" accept="image/*" onChange={(event) => void handlePhotoFile(event.target.files?.[0])} />
               <small>{photoUploading ? 'Przesylanie zdjecia...' : 'Przeciagnij plik tutaj albo wybierz go z komputera.'}</small>
             </div>
-            <FieldLabel>URL zdjecia</FieldLabel>
-            <input className="form-control" value={trainerForm.photoUrl} onChange={(e) => setTrainerForm({ ...trainerForm, photoUrl: e.target.value })} />
             <FieldLabel>Stawka godzinowa</FieldLabel>
             <input className="form-control" value={trainerForm.hourlyRate} onChange={(e) => setTrainerForm({ ...trainerForm, hourlyRate: e.target.value })} type="number" min="0" step="0.01" />
             <FieldLabel>Bio</FieldLabel>
@@ -829,7 +1218,10 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
           </form>
 
           <form className="panel form-grid mt-3" onSubmit={createTrainingType}>
-            <h3>Nowy typ treningu</h3>
+            <div className="d-flex justify-content-between align-items-center gap-2">
+              <h3 className="mb-0">{editingTrainingTypeId ? 'Edycja typu treningu' : 'Nowy typ treningu'}</h3>
+              {editingTrainingTypeId && <button className="btn btn-sm btn-outline-light" type="button" onClick={resetTrainingTypeForm}>Anuluj</button>}
+            </div>
             <FieldLabel required>Nazwa</FieldLabel>
             <input className="form-control" value={trainingTypeForm.name} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, name: e.target.value })} required />
             <FieldLabel>Opis</FieldLabel>
@@ -838,7 +1230,45 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
             <div className="locked-field">90 minut</div>
             <FieldLabel required>Cena PLN</FieldLabel>
             <input className="form-control" type="number" min="1" step="0.01" value={trainingTypeForm.price} onChange={(e) => setTrainingTypeForm({ ...trainingTypeForm, price: e.target.value })} required />
-            <button className="btn btn-warning" type="submit">Dodaj typ treningu</button>
+            <button className="btn btn-warning" type="submit">{editingTrainingTypeId ? 'Zapisz typ' : 'Dodaj typ treningu'}</button>
+          </form>
+
+          <form className="panel form-grid mt-3" onSubmit={saveSpecialization}>
+            <h3>{editingSpecializationId ? 'Edycja specjalizacji' : 'Nowa specjalizacja'}</h3>
+            <FieldLabel required>Nazwa</FieldLabel>
+            <input className="form-control" value={specializationForm.name} onChange={(e) => setSpecializationForm({ ...specializationForm, name: e.target.value })} required />
+            <FieldLabel>Opis</FieldLabel>
+            <textarea className="form-control" value={specializationForm.description} onChange={(e) => setSpecializationForm({ ...specializationForm, description: e.target.value })} />
+            <button className="btn btn-warning" type="submit">{editingSpecializationId ? 'Zapisz specjalizacje' : 'Dodaj specjalizacje'}</button>
+          </form>
+
+          <form className="panel form-grid mt-3" onSubmit={saveStation}>
+            <h3>{editingStationId ? 'Edycja stanowiska' : 'Nowe stanowisko'}</h3>
+            <FieldLabel required>Nazwa</FieldLabel>
+            <input className="form-control" value={stationForm.name} onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })} required />
+            <FieldLabel>Opis</FieldLabel>
+            <textarea className="form-control" value={stationForm.description} onChange={(e) => setStationForm({ ...stationForm, description: e.target.value })} />
+            <button className="btn btn-warning" type="submit">{editingStationId ? 'Zapisz stanowisko' : 'Dodaj stanowisko'}</button>
+          </form>
+
+          <form className="panel form-grid mt-3" onSubmit={saveCertificate}>
+            <h3>{editingCertificateId ? 'Edycja certyfikatu' : 'Nowy certyfikat'}</h3>
+            <FieldLabel required>Trener</FieldLabel>
+            <select className="form-select" value={certificateForm.trainerId} onChange={(e) => setCertificateForm({ ...certificateForm, trainerId: e.target.value })} required>
+              <option value="">Wybierz trenera</option>
+              {trainers.map((trainer) => <option key={trainer.id} value={trainer.id}>{trainer.firstName} {trainer.lastName}</option>)}
+            </select>
+            <FieldLabel required>Nazwa</FieldLabel>
+            <input className="form-control" value={certificateForm.name} onChange={(e) => setCertificateForm({ ...certificateForm, name: e.target.value })} required />
+            <FieldLabel required>Organizacja</FieldLabel>
+            <input className="form-control" value={certificateForm.issuingOrganization} onChange={(e) => setCertificateForm({ ...certificateForm, issuingOrganization: e.target.value })} required />
+            <FieldLabel required>Data wydania</FieldLabel>
+            <input className="form-control" type="date" value={certificateForm.issueDate} onChange={(e) => setCertificateForm({ ...certificateForm, issueDate: e.target.value })} required />
+            <FieldLabel>Data waznosci</FieldLabel>
+            <input className="form-control" type="date" value={certificateForm.expirationDate} onChange={(e) => setCertificateForm({ ...certificateForm, expirationDate: e.target.value })} />
+            <FieldLabel>Numer</FieldLabel>
+            <input className="form-control" value={certificateForm.certificateNumber} onChange={(e) => setCertificateForm({ ...certificateForm, certificateNumber: e.target.value })} />
+            <button className="btn btn-warning" type="submit">{editingCertificateId ? 'Zapisz certyfikat' : 'Dodaj certyfikat'}</button>
           </form>
         </div>
         <div className="col-xl-8">
@@ -876,7 +1306,50 @@ function AdminDashboard({ onError }: { onError: (error: unknown) => void }) {
           </div>
           <div className="panel mt-3">
             <h3>Typy treningow</h3>
-            {trainingTypes.map((type) => <div className="list-line" key={type.id}><span>{type.name}</span><strong>{type.price} PLN</strong></div>)}
+            {trainingTypes.map((type) => (
+              <div className="list-line" key={type.id}>
+                <span>{type.name}</span>
+                <div className="d-flex align-items-center gap-2">
+                  <strong>{type.price} PLN</strong>
+                  <button className="btn btn-sm btn-outline-warning" type="button" onClick={() => editTrainingType(type)}>Edytuj</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="panel mt-3">
+            <h3>Specjalizacje</h3>
+            {specializations.map((specialization) => (
+              <div className="list-line" key={specialization.id}>
+                <span>{specialization.name}</span>
+                <button className="btn btn-sm btn-outline-warning" type="button" onClick={() => editSpecialization(specialization)}>Edytuj</button>
+              </div>
+            ))}
+          </div>
+          <div className="panel mt-3">
+            <h3>Stanowiska treningowe</h3>
+            {stations.map((station) => (
+              <div className="list-line" key={station.id}>
+                <span>{station.name}</span>
+                <button className="btn btn-sm btn-outline-warning" type="button" onClick={() => editStation(station)}>Edytuj</button>
+              </div>
+            ))}
+          </div>
+          <div className="panel mt-3">
+            <h3>Certyfikaty trenerow</h3>
+            {certificates.length === 0 && <p className="text-muted mb-0">Brak certyfikatow.</p>}
+            {certificates.map((certificate) => (
+              <div className="list-line align-items-start" key={certificate.id}>
+                <span>
+                  <strong>{certificate.name}</strong>
+                  <small>{certificate.issuingOrganization} / {certificate.issueDate}</small>
+                </span>
+                <button className="btn btn-sm btn-outline-warning" type="button" onClick={() => editCertificate(certificate)}>Edytuj</button>
+              </div>
+            ))}
+          </div>
+          <div className="panel mt-3">
+            <h3>Wszystkie rezerwacje</h3>
+            <ReservationTableContent reservations={reservations} />
           </div>
         </div>
       </div>
@@ -891,33 +1364,61 @@ function ReservationTable({ reservations, actions }: {
   return (
     <div className="panel">
       <h3>Rezerwacje</h3>
-      <div className="table-responsive">
-        <table className="table table-dark table-hover align-middle">
-          <thead>
-            <tr>
-              <th>Termin</th>
-              <th>Klient</th>
-              <th>Trener</th>
-              <th>Typ</th>
-              <th>Status</th>
-              {actions && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {reservations.map((reservation) => (
-              <tr key={reservation.id}>
-                <td>{formatDate(reservation.startTime)}</td>
-                <td>{reservation.clientName}</td>
-                <td>{reservation.trainerName}</td>
-                <td>{reservation.trainingTypeName}</td>
-                <td><span className={`status status-${reservation.status.toLowerCase()}`}>{statusLabels[reservation.status]}</span></td>
-                {actions && <td>{actions(reservation)}</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ReservationTableContent reservations={reservations} actions={actions} />
     </div>
+  );
+}
+
+function ReservationTableContent({ reservations, actions }: {
+  reservations: Reservation[];
+  actions?: (reservation: Reservation) => React.ReactNode;
+}) {
+  if (reservations.length === 0) {
+    return <p className="text-muted mb-0">Brak rezerwacji.</p>;
+  }
+  return (
+    <div className="table-responsive">
+      <table className="table table-dark table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Termin</th>
+            <th>Klient</th>
+            <th>Trener</th>
+            <th>Typ</th>
+            <th>Status</th>
+            {actions && <th></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {reservations.map((reservation) => (
+            <tr key={reservation.id}>
+              <td>{formatDate(reservation.startTime)}</td>
+              <td>{reservation.clientName}</td>
+              <td>{reservation.trainerName}</td>
+              <td>{reservation.trainingTypeName}</td>
+              <td><span className={`status status-${reservation.status.toLowerCase()}`}>{statusLabels[reservation.status]}</span></td>
+              {actions && <td>{actions(reservation)}</td>}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReservationMiniList({ reservations, empty }: { reservations: Reservation[]; empty: string }) {
+  if (reservations.length === 0) {
+    return <p className="text-muted mb-0">{empty}</p>;
+  }
+  return (
+    <>
+      {reservations.slice(0, 6).map((reservation) => (
+        <div className="list-line" key={reservation.id}>
+          <span>{formatDate(reservation.startTime)} / {reservation.trainerName}</span>
+          <span className={`status status-${reservation.status.toLowerCase()}`}>{statusLabels[reservation.status]}</span>
+        </div>
+      ))}
+    </>
   );
 }
 

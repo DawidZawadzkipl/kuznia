@@ -4,6 +4,7 @@ import type {
   AuthResponse,
   Availability,
   AvailableSlot,
+  Certificate,
   LiftResult,
   LiftType,
   LiftTypeName,
@@ -120,8 +121,14 @@ export const api = {
   trainerReservations: () => request<Reservation[]>('/api/trainer/reservations'),
   confirmReservation: (id: number) => request<Reservation>(`/api/trainer/reservations/${id}/confirm`, 'PUT'),
   rejectReservation: (id: number) => request<Reservation>(`/api/trainer/reservations/${id}/reject`, 'PUT'),
+  cancelTrainerReservation: (id: number, reason?: string) =>
+    request<Reservation>(`/api/trainer/reservations/${id}/cancel`, 'PUT', { reason }),
   completeReservation: (id: number) => request<Reservation>(`/api/trainer/reservations/${id}/complete`, 'PUT'),
   trainerClients: () => request<User[]>('/api/trainer/clients'),
+  trainerClientLiftResults: (clientId: number, liftType?: LiftTypeName) =>
+    request<LiftResult[]>(`/api/trainer/clients/${clientId}/lift-results${liftType ? `?liftType=${liftType}` : ''}`),
+  trainerClientProgress: (clientId: number, liftType?: LiftTypeName) =>
+    request<ProgressPoint[]>(`/api/trainer/clients/${clientId}/progress${liftType ? `?liftType=${liftType}` : ''}`),
   trainerNotes: () => request<TrainingNote[]>('/api/trainer/notes'),
   addNote: (payload: unknown) => request<TrainingNote>('/api/trainer/notes', 'POST', payload),
 
@@ -132,10 +139,19 @@ export const api = {
   createTrainer: (payload: unknown) => request<Trainer>('/api/admin/trainers', 'POST', payload),
   updateTrainer: (id: number, payload: unknown) => request<Trainer>(`/api/admin/trainers/${id}`, 'PUT', payload),
   uploadTrainerPhoto: (file: File) => upload<{ url: string }>('/api/admin/uploads/trainer-photo', file),
+  adminSpecializations: () => request<Specialization[]>('/api/admin/specializations'),
+  createSpecialization: (payload: unknown) => request<Specialization>('/api/admin/specializations', 'POST', payload),
+  updateSpecialization: (id: number, payload: unknown) => request<Specialization>(`/api/admin/specializations/${id}`, 'PUT', payload),
   adminTrainingTypes: () => request<TrainingType[]>('/api/admin/training-types'),
   createTrainingType: (payload: unknown) => request<TrainingType>('/api/admin/training-types', 'POST', payload),
+  updateTrainingType: (id: number, payload: unknown) => request<TrainingType>(`/api/admin/training-types/${id}`, 'PUT', payload),
   adminStations: () => request<TrainingStation[]>('/api/admin/training-stations'),
   createStation: (payload: unknown) => request<TrainingStation>('/api/admin/training-stations', 'POST', payload),
+  updateStation: (id: number, payload: unknown) => request<TrainingStation>(`/api/admin/training-stations/${id}`, 'PUT', payload),
+  adminCertificates: () => request<Certificate[]>('/api/admin/certificates'),
+  createCertificate: (payload: unknown) => request<Certificate>('/api/admin/certificates', 'POST', payload),
+  updateCertificate: (id: number, payload: unknown) => request<Certificate>(`/api/admin/certificates/${id}`, 'PUT', payload),
+  adminReservations: () => request<Reservation[]>('/api/admin/reservations'),
 };
 
 export function resolveMediaUrl(photoUrl?: string) {
