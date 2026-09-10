@@ -1,0 +1,155 @@
+@startuml database-schema
+title Schemat Bazy Danych Kuznia
+
+!define ENTITY(name, fields) entity name { fields }
+
+ENTITY(ROLES, "
+  id (PK): BIGSERIAL
+  --
+  name: VARCHAR(50) UNIQUE
+  (ADMIN, TRAINER, CLIENT)
+")
+
+ENTITY(USERS, "
+  id (PK): BIGSERIAL
+  role_id (FK): BIGINT NOT NULL
+  --
+  email: VARCHAR(255) UNIQUE
+  password_hash: VARCHAR(255)
+  first_name: VARCHAR(100)
+  last_name: VARCHAR(100)
+  phone: VARCHAR(30)
+  is_active: BOOLEAN DEFAULT true
+  created_at: TIMESTAMP
+")
+
+ENTITY(TRAINER_PROFILES, "
+  id (PK): BIGSERIAL
+  user_id (FK): BIGINT UNIQUE
+  --
+  bio: TEXT
+  photo_url: VARCHAR(255)
+  hourly_rate: DECIMAL
+  experience_years: INT
+  created_at: TIMESTAMP
+")
+
+ENTITY(TRAINER_SPECIALIZATIONS, "
+  id (PK): BIGSERIAL
+  --
+  name: VARCHAR(100)
+  description: TEXT
+")
+
+ENTITY(TRAINER_SPEC_MAPPING, "
+  trainer_id (FK): BIGINT
+  specialization_id (FK): BIGINT
+  --
+  (PK: composite)
+")
+
+ENTITY(RESERVATIONS, "
+  id (PK): BIGSERIAL
+  client_id (FK): BIGINT
+  trainer_id (FK): BIGINT
+  training_type_id (FK): BIGINT
+  --
+  start_time: TIMESTAMP
+  end_time: TIMESTAMP
+  status: VARCHAR(20)
+  cancellation_reason: TEXT
+  created_at: TIMESTAMP
+")
+
+ENTITY(RESERVATION_STATUSES, "
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  COMPLETED
+")
+
+ENTITY(TRAINING_TYPES, "
+  id (PK): BIGSERIAL
+  --
+  name: VARCHAR(100)
+  description: TEXT
+  duration_minutes: INT
+  price: DECIMAL
+  active: BOOLEAN
+")
+
+ENTITY(LIFT_TYPES, "
+  id (PK): BIGSERIAL
+  --
+  name: VARCHAR(50)
+  (SQUAT, BENCH_PRESS, DEADLIFT)
+")
+
+ENTITY(LIFT_RESULTS, "
+  id (PK): BIGSERIAL
+  client_id (FK): BIGINT
+  lift_type_id (FK): BIGINT
+  --
+  weight_kg: DECIMAL
+  reps: INT
+  estimated_one_rep_max: DECIMAL
+  result_date: DATE
+  created_at: TIMESTAMP
+")
+
+ENTITY(TRAINING_NOTES, "
+  id (PK): BIGSERIAL
+  trainer_id (FK): BIGINT
+  client_id (FK): BIGINT
+  reservation_id (FK): BIGINT
+  --
+  note: TEXT
+  created_at: TIMESTAMP
+")
+
+ENTITY(TRAINER_AVAILABILITY, "
+  id (PK): BIGSERIAL
+  trainer_id (FK): BIGINT
+  --
+  start_time: TIMESTAMP
+  end_time: TIMESTAMP
+  available: BOOLEAN
+  created_at: TIMESTAMP
+")
+
+ENTITY(TRAINER_CERTIFICATES, "
+  id (PK): BIGSERIAL
+  trainer_id (FK): BIGINT
+  --
+  name: VARCHAR(255)
+  issuing_organization: VARCHAR(255)
+  issue_date: DATE
+  expiration_date: DATE
+  certificate_number: VARCHAR(100)
+")
+
+ENTITY(TRAINING_STATIONS, "
+  id (PK): BIGSERIAL
+  --
+  name: VARCHAR(100)
+  description: TEXT
+  active: BOOLEAN
+")
+
+ROLES ||--o{ USERS: has
+USERS ||--o{ TRAINER_PROFILES: user
+TRAINER_PROFILES ||--o{ TRAINER_SPECIALIZATIONS: has
+TRAINER_PROFILES ||--o{ RESERVATIONS: trainer
+USERS ||--o{ RESERVATIONS: client
+TRAINING_TYPES ||--o{ RESERVATIONS: type
+RESERVATIONS }o--|| RESERVATION_STATUSES: has
+USERS ||--o{ LIFT_RESULTS: logs
+LIFT_TYPES ||--o{ LIFT_RESULTS: type
+USERS ||--o{ TRAINING_NOTES: writer
+USERS ||--o{ TRAINING_NOTES: about
+TRAINER_PROFILES ||--o{ TRAINER_AVAILABILITY: availability
+TRAINER_PROFILES ||--o{ TRAINER_CERTIFICATES: has
+TRAINING_STATIONS }o--|| TRAINING_STATIONS: uses
+
+@enduml

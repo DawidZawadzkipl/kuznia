@@ -1,0 +1,44 @@
+@startuml sequence-reservation-confirm
+title Diagram Sekwencji: Potwierdzenie Rezerwacji przez Trenera
+
+actor Trainer
+participant "Frontend" as Frontend
+participant "TrainerController" as TrainerCtrl
+participant "ReservationService" as Service
+participant "ReservationRepository" as Repo
+database "PostgreSQL" as DB
+
+Trainer -> Frontend: 1. Przegląda rezerwacje (status=PENDING)
+Trainer -> Frontend: 2. Klika przycisk 'Potwierdź'
+Frontend -> TrainerCtrl: 3. PUT /api/trainer/reservations/{id}/confirm
+TrainerCtrl -> Service: 4. confirmTrainerReservation(trainerId, reservationId)
+
+Service -> Repo: 5. findById(reservationId)
+Repo -> DB: 6. SELECT * FROM reservations WHERE id=?
+DB --> Repo: 7. Reservation
+Repo --> Service: 8. Reservation object
+
+alt Rezerwacja należy do trenera
+  Service -> Service: 9. Zmień status\nPENDING → CONFIRMED
+  Service -> Repo: 10. save(Reservation)
+  Repo -> DB: 11. UPDATE reservations SET status='CONFIRMED'
+  DB --> Repo: 12. Updated
+  Repo --> Service: 13. Updated Reservation
+  Service --> TrainerCtrl: 14. ReservationResponse
+  TrainerCtrl --> Frontend: 15. 200 OK
+  Frontend --> Trainer: 16. ✅ Rezerwacja potwierdzona
+else Rezerwacja nie należy do trenera
+  Service --> TrainerCtrl: 9. DomainException (Forbidden)
+  TrainerCtrl --> Frontend: 10. 403 Forbidden
+  Frontend --> Trainer: 11. ❌ Brak dostępu
+end
+
+note over Service
+  Flagi zmiany stanu:
+  PENDING → CONFIRMED
+  PENDING → REJECTED
+  CONFIRMED → COMPLETED
+  Dowolny → CANCELLED
+end note
+
+@enduml

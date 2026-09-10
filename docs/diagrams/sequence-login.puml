@@ -1,0 +1,51 @@
+@startuml sequence-login
+title Diagram Sekwencji: Logowanie Użytkownika
+
+actor User
+participant "Frontend\n(React)" as Frontend
+participant "AuthController" as Controller
+participant "AuthService" as Service
+participant "UserRepository" as Repo
+participant "PasswordEncoder\n(BCrypt)" as Encoder
+database "PostgreSQL" as DB
+participant "JwtService" as JWT
+
+User -> Frontend: 1. Wpisuje email i hasło
+Frontend -> Controller: 2. POST /api/auth/login
+Controller -> Service: 3. login(LoginRequest)
+Service -> Repo: 4. findByEmail(email)
+Repo -> DB: 5. SELECT * FROM users WHERE email=?
+DB --> Repo: 6. User record
+Repo --> Service: 7. User object
+
+alt User znaleziony
+  Service -> Encoder: 8. matches(password, passwordHash)
+  Encoder --> Service: 9. boolean result
+  
+  alt Hasło prawidłowe
+    Service -> JWT: 10. generateToken(user)
+    JWT --> Service: 11. JWT token
+    Service --> Controller: 12. AuthResponse(token, user)
+    Controller --> Frontend: 13. 200 OK {token, user}
+    Frontend -> Frontend: 14. localStorage.setItem(token)
+    Frontend --> User: 15. ✅ Zalogowany\nPrzejście do panelu
+  else Hasło błędne
+    Service --> Controller: 10. BadCredentialsException
+    Controller --> Frontend: 11. 401 Unauthorized
+    Frontend --> User: 12. ❌ Nieprawidłowe hasło
+  end
+else User nie znaleziony
+  Service --> Controller: 8. BadCredentialsException
+  Controller --> Frontend: 9. 401 Unauthorized
+  Frontend --> User: 10. ❌ Email nie istnieje
+end
+
+note over JWT
+  Token zawiera:
+  - email
+  - userId
+  - role
+  - expiration (24h)
+end note
+
+@enduml
