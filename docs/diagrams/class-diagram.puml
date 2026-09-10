@@ -1,0 +1,211 @@
+@startuml class-diagram
+title Diagram Klas: Architektura Kuznia
+
+package "Domain Layer" #DDDDDD {
+  class User {
+    - id: Long
+    - email: String
+    - passwordHash: String
+    - firstName: String
+    - lastName: String
+    - phone: String
+    - isActive: boolean
+    - createdAt: Instant
+    - role: Role
+  }
+
+  class Role {
+    - id: Long
+    - name: RoleName (ADMIN, TRAINER, CLIENT)
+  }
+
+  class TrainerProfile {
+    - id: Long
+    - user: User
+    - bio: String
+    - photoUrl: String
+    - hourlyRate: BigDecimal
+    - experienceYears: int
+  }
+
+  class Reservation {
+    - id: Long
+    - client: User
+    - trainer: TrainerProfile
+    - trainingType: TrainingType
+    - startTime: Instant
+    - endTime: Instant
+    - status: ReservationStatus
+    - cancellationReason: String
+    - createdAt: Instant
+  }
+
+  class LiftResult {
+    - id: Long
+    - client: User
+    - liftType: LiftType
+    - weightKg: BigDecimal
+    - reps: int
+    - estimatedOneRepMax: BigDecimal
+    - resultDate: LocalDate
+    - createdAt: Instant
+  }
+
+  class TrainingNote {
+    - id: Long
+    - trainer: TrainerProfile
+    - client: User
+    - reservation: Reservation
+    - note: String
+    - createdAt: Instant
+  }
+
+  class TrainerAvailability {
+    - id: Long
+    - trainer: TrainerProfile
+    - startTime: Instant
+    - endTime: Instant
+    - available: boolean
+  }
+}
+
+package "Service Layer" #CCDDFF {
+  interface ReservationService {
+    + requestReservation(clientId, request): Reservation
+    + confirmReservation(trainerId, reservationId): Reservation
+    + rejectReservation(trainerId, reservationId): Reservation
+    + cancelReservation(userId, reservationId): Reservation
+    + completeReservation(trainerId, reservationId): Reservation
+    + findByClient(clientId): List<Reservation>
+    + findByTrainer(trainerId): List<Reservation>
+  }
+
+  interface AuthService {
+    + login(email, password): AuthResponse
+    + register(request): AuthResponse
+  }
+
+  interface LiftResultService {
+    + addResult(clientId, request): LiftResult
+    + findByClient(clientId): List<LiftResult>
+    + findByClientAndLift(clientId, liftType): List<LiftResult>
+    + calculateTotal(clientId): PowerliftingTotal
+  }
+
+  interface AvailabilityService {
+    + create(trainerId, request): TrainerAvailability
+    + findByTrainer(trainerId): List<TrainerAvailability>
+    + updateForTrainer(trainerId, id, request): TrainerAvailability
+  }
+
+  interface TrainingNoteService {
+    + addNote(trainerId, request): TrainingNote
+    + findByTrainer(trainerId): List<TrainingNote>
+    + findByClient(clientId): List<TrainingNote>
+  }
+}
+
+package "Web Layer" #FFDDCC {
+  class ClientController {
+    - reservationService: ReservationService
+    - liftResultService: LiftResultService
+    + getReservations(): List<ReservationResponse>
+    + requestReservation(request): ReservationResponse
+    + getLiftResults(): List<LiftResultResponse>
+    + addLiftResult(request): LiftResultResponse
+    + getProgress(): List<ProgressPointResponse>
+    + getTotal(): PowerliftingTotalResponse
+  }
+
+  class TrainerController {
+    - reservationService: ReservationService
+    - availabilityService: AvailabilityService
+    - trainingNoteService: TrainingNoteService
+    + getProfile(): TrainerResponse
+    + getReservations(): List<ReservationResponse>
+    + confirmReservation(id): ReservationResponse
+    + rejectReservation(id): ReservationResponse
+    + getAvailability(): List<AvailabilityResponse>
+    + createAvailability(request): AvailabilityResponse
+    + addNote(request): TrainingNoteResponse
+  }
+
+  class AdminController {
+    - userService: UserService
+    - trainerService: TrainerService
+    + getUsers(): List<UserResponse>
+    + updateUserStatus(id, request): UserResponse
+    + getTrainers(): List<TrainerResponse>
+    + createTrainer(request): TrainerResponse
+    + getStats(): AdminStatsResponse
+  }
+
+  class AuthController {
+    - authService: AuthService
+    + login(request): AuthResponse
+    + register(request): AuthResponse
+  }
+}
+
+package "Repository Layer" #DDFFCC {
+  interface UserRepository {
+    + findByEmail(email): Optional<User>
+    + findById(id): Optional<User>
+    + existsByEmail(email): boolean
+    + count(): long
+  }
+
+  interface ReservationRepository {
+    + findByClient_Id(clientId): List<Reservation>
+    + findByTrainer_Id(trainerId): List<Reservation>
+    + countByStatus(status): long
+  }
+
+  interface LiftResultRepository {
+    + findByClient_Id(clientId): List<LiftResult>
+    + findByClient_IdAndLiftType(clientId, liftType): List<LiftResult>
+  }
+}
+
+package "Security" #FFDDDD {
+  class JwtService {
+    - key: SecretKey
+    + generateToken(user): String
+    + extractSubject(token): String
+    + isValid(token, principal): boolean
+  }
+
+  class UserPrincipal {
+    - userId: Long
+    - username: String
+    - role: RoleName
+    - authorities: Collection<Authority>
+  }
+}
+
+' Relacje
+User --> Role: has
+TrainerProfile --> User: linked to
+Reservation --> User: client
+Reservation --> TrainerProfile: trainer
+Reservation --> TrainingType: type
+LiftResult --> User: logged by
+LiftResult --> LiftType: type
+TrainingNote --> User: writer
+TrainingNote --> TrainerProfile: by
+TrainerAvailability --> TrainerProfile: for
+
+ClientController --> ReservationService
+ClientController --> LiftResultService
+TrainerController --> ReservationService
+TrainerController --> AvailabilityService
+AdminController --> UserService
+AuthController --> AuthService
+
+ReservationService --> ReservationRepository
+LiftResultService --> LiftResultRepository
+AuthService --> UserRepository
+
+JwtService --> UserPrincipal
+
+@enduml

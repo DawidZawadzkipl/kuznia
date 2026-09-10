@@ -1,0 +1,48 @@
+@startuml use-cases
+left to right direction
+scale 1500 width
+
+:Klient: as client
+:Trener: as trainer
+:Admin: as admin
+
+rectangle "Kuznia - System Zarządzania Treningami Trojbojowymi" {
+  usecase "UC1: Zalogować się" as login
+  usecase "UC2: Rejestrować konto" as register
+  usecase "UC3: Rezerwować trening" as reserve
+  usecase "UC4: Potwierdzić rezerwację" as confirm
+  usecase "UC5: Odrzucić rezerwację" as reject
+  usecase "UC6: Logować wyniki podnoszów" as logLift
+  usecase "UC7: Przeglądać postępy" as viewProgress
+  usecase "UC8: Zarządzać użytkownikami" as manageUsers
+  usecase "UC9: Zarządzać trenerami" as manageTrainers
+  usecase "UC10: Edytować dostępność" as editAvailability
+  usecase "UC11: Dodawać notatki treningowe" as addNotes
+  usecase "UC12: Przeglądać statystyki" as viewStats
+  usecase "UC13: Zarządzać certyfikatami" as manageCerts
+}
+
+client --> login
+client --> register
+client --> reserve
+client --> logLift
+client --> viewProgress
+client --> addNotes
+
+trainer --> login
+trainer --> confirm
+trainer --> reject
+trainer --> editAvailability
+trainer --> addNotes
+trainer --> viewProgress
+
+admin --> login
+admin --> manageUsers
+admin --> manageTrainers
+admin --> viewStats
+admin --> manageCerts
+admin --> addNotes
+
+login <-- register
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml sequence-reservation
+title Diagram Sekwencji: Rezerwacja Treningu
+
+actor Client
+participant "Frontend" as Frontend
+participant "ClientController" as ClientCtrl
+participant "ReservationService" as Service
+participant "AvailabilityService" as AvailService
+participant "ReservationRepository" as Repo
+database "PostgreSQL" as DB
+
+Client -> Frontend: 1. Wybiera trenera, typ treningu, termin
+Frontend -> ClientCtrl: 2. POST /api/client/reservations
+ClientCtrl -> Service: 3. requestReservation(clientId, request)
+
+Service -> AvailService: 4. Sprawdź dostępność trenera
+AvailService -> DB: 5. SELECT * FROM trainer_availability
+DB --> AvailService: 6. Dostępność
+AvailService --> Service: 7. boolean available
+
+alt Termin dostępny
+  Service -> Service: 8. Walidacja danych
+  Service -> Repo: 9. save(Reservation)
+  Repo -> DB: 10. INSERT INTO reservations
+  DB --> Repo: 11. Reservation ID
+  Repo --> Service: 12. Saved Reservation
+  Service --> ClientCtrl: 13. ReservationResponse(id, status=PENDING)
+  ClientCtrl --> Frontend: 14. 200 OK
+  Frontend --> Client: 15. ✅ Rezerwacja złożona\nStatus: OCZEKUJE NA POTWIERDZENIE
+  
+  note over Service
+    Status: PENDING
+    Czeka na potwierdzenie trenera
+  end note
+else Termin niedostępny
+  Service --> ClientCtrl: 8. DomainException
+  ClientCtrl --> Frontend: 9. 400 Bad Request
+  Frontend --> Client: 10. ❌ Wybrany termin jest niedostępny
+end
+
+@enduml

@@ -1,0 +1,47 @@
+@startuml sequence-lift-result
+title Diagram Sekwencji: Logowanie Wyniku Podnoszenia
+
+actor Client
+participant "Frontend" as Frontend
+participant "ClientController" as ClientCtrl
+participant "LiftResultService" as Service
+participant "LiftResultRepository" as Repo
+database "PostgreSQL" as DB
+
+Client -> Frontend: 1. Wypełnia formularz wyniku
+Client -> Frontend: 2. Wybiera: Bój (Squat/Bench/Deadlift)
+Client -> Frontend: 3. Wpisuje: Ciężar (kg), Powtórzenia, Datę
+Frontend -> ClientCtrl: 4. POST /api/client/lift-results
+ClientCtrl -> Service: 5. addResult(clientId, LiftResultRequest)
+
+Service -> Service: 6. Walidacja danych
+Service -> Service: 7. Kalkulacja estimated 1RM\n(Epley formula)
+
+alt Dane prawidłowe
+  Service -> Repo: 8. save(LiftResult)
+  Repo -> DB: 9. INSERT INTO lift_results
+  DB --> Repo: 10. Inserted ID
+  Repo --> Service: 11. LiftResult object
+  Service --> ClientCtrl: 12. LiftResultResponse
+  ClientCtrl --> Frontend: 13. 200 OK
+  Frontend --> Client: 14. ✅ Wynik zapisany\nNowy total: XXX kg
+else Dane nieprawidłowe
+  Service --> ClientCtrl: 8. ValidationException
+  ClientCtrl --> Frontend: 9. 400 Bad Request
+  Frontend --> Client: 10. ❌ Sprawdź poprawność danych
+end
+
+note over Service
+  Estimated 1RM = weight × (1 + reps/30)
+  Przykład: 100kg × 5 reps
+  e1RM = 100 × (1 + 5/30) = 116.7 kg
+end note
+
+note over DB
+  Przechowuje:
+  - Wszystkie wyniki
+  - Umożliwia śledzenie postępów
+  - Obliczanie totalnego wyniku
+end note
+
+@enduml
